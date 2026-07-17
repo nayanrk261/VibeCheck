@@ -1,4 +1,6 @@
-const express = require('express');
+ const fs = require('fs');
+
+const content = `const express = require('express');
 const dotenv = require('dotenv');
 dotenv.config();
 const cors = require('cors');
@@ -15,4 +17,7 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log("Server running on port " + PORT);
-});
+});`;
+
+fs.writeFileSync('index.js', content);
+console.log("Done!");

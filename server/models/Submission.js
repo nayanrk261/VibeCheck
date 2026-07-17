@@ -1,4 +1,4 @@
-const mongoose = reqiure('mongoose');
+const mongoose = require('mongoose')
 
 const findingSchema = new mongoose.Schema({
     title : {type : String, required : true },

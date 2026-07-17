@@ -43,6 +43,8 @@ const scanFileForSecrets = (filepath,Content) => {
     for(const secretType of SECRET_PATTERNS) {
         secretType.pattern.lastIndex = 0;
 
+        if(typeof Content !== 'string') return findings;
+
         const matches = Content.match(secretType.pattern);
 
         if(matches){

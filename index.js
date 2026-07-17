@@ -1,9 +1,10 @@
 const express = require('express');
 const dotenv = require('dotenv');
+dotenv.config();
+
 const cors = require('cors');
 const ConnectDB = require('./config/db');
-
-dotenv.config();
+const auditRouter = require("./routes/audit");
 
 ConnectDB();
 
@@ -11,6 +12,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use("/api", auditRouter);
 
 app.get("/",(req,res) => {
     res.json({message : "Vibecheck app is running"});

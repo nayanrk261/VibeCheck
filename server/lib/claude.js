@@ -1,73 +1,56 @@
 const axios = require("axios");
 
-const callClaude = async (prompt) => {
-    const response = await axios.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-            model: "meta-llama/llama-3.1-8b-instruct:free",
-            messages: [
-                {
-                    role: "user",
-                    content: prompt
-                }               
-            ],
-            max_tokens : 2000
-        },
-        {
-            headers : {
-                "Authorization" : `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json"
+const callClaude = async (prompt, retries = 3) => {
+    try {
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama-3.1-8b-instant",
+                messages: [{ role: "user", content: prompt }],
+                max_tokens: 2000
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+                    "Content-Type": "application/json"
+                }
             }
+        );
+        return response.data.choices[0].message.content;
+    } catch(err) {
+        if(err.response?.status === 429 && retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            return callClaude(prompt, retries - 1);
         }
-    );
-    const content = response.data.choices[0].message.content;
-    return content;
-}
+        throw err;
+    }
+};
 
 const buildPrompt = (githubData, scanData, headerData) => {
     return `
-You are a senior security engineer reviewing a vibe-coded (AI-generated) web application.
-
-Based on the following real findings, provide a security audit report.
+You are a senior security engineer reviewing a vibe-coded web application.
 
 GITHUB ANALYSIS:
-- Tech Stack: ${githubData.techStack.join(", ")}
+- Tech Stack: ${githubData.techStack.join(", ") || "Unknown"}
 - Files Analyzed: ${githubData.fileCount}
 
-SECRET SCAN RESULTS:
+SECRET SCAN:
 - Secrets Found: ${scanData.secrets.length}
-- Files Scanned: ${scanData.filesScanned}
-- Findings: ${JSON.stringify(scanData.secrets, null, 2)}
+- Types: ${scanData.secrets.map(s => s.type).join(', ') || 'None'}
 - ENV Check: ${scanData.envCheck.message}
 
 HEADER ANALYSIS:
 - Response Time: ${headerData.responseTime}ms
-- HTTPS Used: ${headerData.httpsUsed}
-- Header Findings: ${JSON.stringify(headerData.findings, null, 2)}
+- HTTPS: ${headerData.httpsUsed}
+- Missing Headers: ${headerData.findings.map(f => f.header).join(', ') || 'None'}
 
-Based on ONLY these real findings, respond with a JSON object in this exact format:
+Respond with ONLY this JSON:
 {
-    "scores": {
-        "security": <0-100>,
-        "codeQuality": <0-100>,
-        "uiUx": <0-100>,
-        "performance": <0-100>,
-        "overall": <0-100>
-    },
-    "summary": "<2-3 sentence executive summary>",
-    "findings": [
-        {
-            "title": "<short title>",
-            "severity": "<CRITICAL|HIGH|MEDIUM|LOW|INFO>",
-            "category": "<Security|Performance|Code Quality|Configuration>",
-            "description": "<what the issue is>",
-            "fix": "<how to fix it>"
-        }
-    ],
-    "positives": ["<things done well>"]
+    "scores": { "security": 0, "codeQuality": 0, "uiUx": 0, "performance": 0, "overall": 0 },
+    "summary": "<2-3 sentences>",
+    "findings": [{ "title": "", "severity": "HIGH", "category": "", "description": "", "fix": "" }],
+    "positives": [""]
 }
-
-Respond with ONLY the JSON — no markdown, no explanation outside JSON.
 `;
 };
 
