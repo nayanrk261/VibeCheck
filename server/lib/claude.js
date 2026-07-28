@@ -44,10 +44,14 @@ HEADER ANALYSIS:
 - HTTPS: ${headerData.httpsUsed}
 - Missing Headers: ${headerData.findings.map(f => f.header).join(', ') || 'None'}
 
+IMPORTANT: overall score must be the average of all 4 category scores.
+summary must always be filled — never leave it empty.
+Return ONLY valid JSON — no markdown, no extra text.
+
 Respond with ONLY this JSON:
 {
-    "scores": { "security": 0, "codeQuality": 0, "uiUx": 0, "performance": 0, "overall": 0 },
-    "summary": "<2-3 sentences>",
+    "scores": { "security": <number 0-100>, "codeQuality": <number 0-100>, "uiUx": <number 0-100>, "performance": <number 0-100>, "overall": <number 0-100> },
+    "summary": "<write 2-3 sentences about the overall security posture>",
     "findings": [{ "title": "", "severity": "HIGH", "category": "", "description": "", "fix": "" }],
     "positives": [""]
 }
