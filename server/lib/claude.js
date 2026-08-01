@@ -38,6 +38,7 @@ SECRET SCAN:
 - Secrets Found: ${scanData.secrets.length}
 - Types: ${scanData.secrets.map(s => s.type).join(', ') || 'None'}
 - ENV Check: ${scanData.envCheck.message}
+- Note: If .env is not in repo, it means it's properly gitignored. Do NOT flag this as an issue.
 
 HEADER ANALYSIS:
 - Response Time: ${headerData.responseTime}ms

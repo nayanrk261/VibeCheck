@@ -26,44 +26,60 @@ export default function Home() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!repoUrl && !liveUrl) {
-      setError('Please enter at least a GitHub repo URL or a live app URL.');
-      return;
+        setError('Please enter at least a GitHub repo URL or a live app URL.');
+        return;
     }
+
     setScanning(true);
     setError('');
     setLogs([]);
     setProgress(0);
 
+    // Clean URLs
+    let cleanRepo = repoUrl.trim()
+        .replace('https://github.com/', '')
+        .replace('http://github.com/', '')
+        .replace('github.com/', '');
+
+    let cleanLive = liveUrl.trim();
+    if (cleanLive && !cleanLive.startsWith('http')) {
+        cleanLive = 'https://' + cleanLive;
+    }
+
+    const finalRepo = cleanRepo ? `https://github.com/${cleanRepo}` : '';
+    const finalLive = cleanLive || '';
+
     let i = 0;
     const interval = setInterval(() => {
-      if (i < SCAN_STEPS.length - 1) {
-        const step = SCAN_STEPS[i];
-        setProgressLabel(step.label);
-        setProgress(step.pct);
-        setLogs(prev => [...prev, { text: step.text, cls: step.cls }]);
-        i++;
-      }
+        if (i < SCAN_STEPS.length - 1) {
+            const step = SCAN_STEPS[i];
+            setProgressLabel(step.label);
+            setProgress(step.pct);
+            setLogs(prev => [...prev, { text: step.text, cls: step.cls }]);
+            i++;
+        }
     }, 600);
 
     try {
-      const result = await submitAudit(repoUrl, liveUrl);
-      clearInterval(interval);
-      setProgress(100);
-      setProgressLabel('Report ready!');
-      setLogs(prev => [...prev, { text: '✓ audit complete — redirecting...', cls: 'text-green-400' }]);
-      const id = result.submissionId || result._id;
-      setTimeout(() => navigate(`/result/${id}`), 800);
+        const result = await submitAudit(finalRepo, finalLive);
+        clearInterval(interval);
+        setProgress(100);
+        setProgressLabel('Report ready!');
+        setLogs(prev => [...prev, { text: '✓ audit complete — redirecting...', cls: 'text-green-400' }]);
+        const id = result.submissionId || result._id;
+        setTimeout(() => navigate(`/result/${id}`), 800);
     } catch (err) {
-      clearInterval(interval);
-      setError('Audit failed. Check your URLs and try again.');
-      setScanning(false);
-      setProgress(0);
-      setLogs([]);
+        clearInterval(interval);
+        setError('Audit failed. Check your URLs and try again.');
+        setScanning(false);
+        setProgress(0);
+        setLogs([]);
     }
-  };
+};
 
   return (
     <div className="min-h-screen bg-[#080808] text-zinc-100 flex flex-col">

@@ -6,19 +6,30 @@ const Submission = require("../models/Submission");
 
 const runAudit = async (req, res) => {
     try {
-        const { repoUrl, liveUrl } = req.body;
+        let { repoUrl, liveUrl } = req.body;
 
-        if (!repoUrl || !liveUrl) {
-            return res.status(400).json({ error: "repoUrl and liveUrl are required" });
+        if (!repoUrl && !liveUrl) {
+            return res.status(400).json({ error: "At least one URL is required" });
         }
 
-        const { owner, repo } = parseGithubUrl(repoUrl);
-        const files = await fetchRepoTree(owner, repo);
-        const techStack = detectTechStack(files);
+        // GitHub data
+        let githubData = { owner: '', repo: '', techStack: [], fileCount: 0 };
+        let scanData = { secrets: [], envCheck: { message: 'No repo provided' }, filesScanned: 0 };
 
-        const githubData = { owner, repo, techStack, fileCount: files.length };
-        const scanData = await scanRepo(files, fetchFileContent, owner, repo);
-        const headerData = await analyzeHeaders(liveUrl);
+        if (repoUrl) {
+            const { owner, repo } = parseGithubUrl(repoUrl);
+            const files = await fetchRepoTree(owner, repo);
+            const techStack = detectTechStack(files);
+            githubData = { owner, repo, techStack, fileCount: files.length };
+            scanData = await scanRepo(files, fetchFileContent, owner, repo);
+        }
+
+        // Header data
+        const headerData = liveUrl
+            ? await analyzeHeaders(liveUrl)
+            : { responseTime: null, httpsUsed: false, findings: [], error: false };
+
+        // AI analysis
         const aiResult = await analyzeWithAI(githubData, scanData, headerData);
 
         if (!aiResult.success) {
@@ -34,14 +45,14 @@ const runAudit = async (req, res) => {
         }
 
         const submission = new Submission({
-            repoUrl,
-            liveUrl,
-            scores: scores,
+            repoUrl: repoUrl || '',
+            liveUrl: liveUrl || '',
+            scores,
             summary: aiResult.data.summary || '',
             findings: aiResult.data.findings || [],
             positives: aiResult.data.positives || [],
             meta: {
-                techStack,
+                techStack: githubData.techStack,
                 filesScanned: scanData.filesScanned,
                 responseTime: headerData.responseTime,
                 httpsUsed: headerData.httpsUsed

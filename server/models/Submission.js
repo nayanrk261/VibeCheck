@@ -13,8 +13,8 @@ const findingSchema = new mongoose.Schema({
 });
 
 const submissionSchema = new mongoose.Schema({
-    repoUrl: { type: String, required: true },
-    liveUrl: { type: String, required: true },
+    repoUrl: { type: String, default: '' },
+    liveUrl: { type: String, default: '' },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",

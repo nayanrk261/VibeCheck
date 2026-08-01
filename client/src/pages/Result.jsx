@@ -6,32 +6,52 @@ function FindingCard({ finding }) {
   const [open, setOpen] = useState(false);
   const sev = finding.severity?.toUpperCase();
   const cfg = {
-    CRITICAL: { border: 'border-red-500/20', tag: 'bg-red-500/10 text-red-400 border-red-500/25' },
-    HIGH:     { border: 'border-orange-500/20', tag: 'bg-orange-500/10 text-orange-400 border-orange-500/25' },
-    MEDIUM:   { border: 'border-yellow-500/20', tag: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/25' },
-    LOW:      { border: 'border-blue-500/20', tag: 'bg-blue-500/10 text-blue-400 border-blue-500/25' },
-    INFO:     { border: 'border-white/5', tag: 'bg-white/5 text-zinc-500 border-white/10' },
-  }[sev] || { border: 'border-white/5', tag: 'bg-white/5 text-zinc-500 border-white/10' };
+    CRITICAL: { 
+      border: 'border-l-red-500 border-red-500/10', 
+      tag: 'bg-red-500/10 text-red-400',
+      dot: 'bg-red-500'
+    },
+    HIGH: { 
+      border: 'border-l-orange-500 border-orange-500/10', 
+      tag: 'bg-orange-500/10 text-orange-400',
+      dot: 'bg-orange-500'
+    },
+    MEDIUM: { 
+      border: 'border-l-yellow-500 border-yellow-500/10', 
+      tag: 'bg-yellow-500/10 text-yellow-400',
+      dot: 'bg-yellow-500'
+    },
+    LOW: { 
+      border: 'border-l-blue-500 border-blue-500/10', 
+      tag: 'bg-blue-500/10 text-blue-400',
+      dot: 'bg-blue-500'
+    },
+    INFO: { 
+      border: 'border-l-zinc-600 border-zinc-800', 
+      tag: 'bg-zinc-800 text-zinc-500',
+      dot: 'bg-zinc-600'
+    },
+  }[sev] || { border: 'border-l-zinc-600 border-zinc-800', tag: 'bg-zinc-800 text-zinc-500', dot: 'bg-zinc-600' };
 
   return (
-    <div
-      className={`bg-[#0d0d0d] border ${cfg.border} rounded-xl overflow-hidden cursor-pointer`}
-      onClick={() => setOpen(!open)}
-    >
-      <div className="flex items-center gap-4 px-6 py-5 hover:bg-white/[0.015] transition-colors">
-        <span className={`text-[10px] font-bold tracking-widest px-3 py-1.5 rounded-lg border ${cfg.tag} shrink-0`}>
+    <div className={`bg-[#0d0d0d] border border-l-2 ${cfg.border} rounded-xl overflow-hidden`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-4 px-6 py-4 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <div className={`w-2 h-2 rounded-full ${cfg.dot} shrink-0`} />
+        <span className={`text-[10px] font-bold tracking-widest px-2.5 py-1 rounded ${cfg.tag} shrink-0`}>
           {sev}
         </span>
-        <span className="text-sm text-[#bbb] flex-1">{finding.title}</span>
-        <span className="text-[10px] text-zinc-700">{open ? '▲' : '▼'}</span>
-      </div>
+        <span className="text-sm text-zinc-300 flex-1">{finding.title}</span>
+        <span className="text-[10px] text-zinc-700 shrink-0">{open ? '▲' : '▼'}</span>
+      </button>
       {open && (
-        <div className="px-6 pb-6 border-t border-white/5 pt-5">
-          <p className="text-sm text-zinc-500 leading-relaxed mb-4">{finding.description}</p>
-          <div className="bg-green-400/5 border border-green-400/10 rounded-xl px-5 py-4">
-            <p className="text-sm text-green-400 leading-relaxed">
-              <span className="font-semibold">Fix: </span>{finding.fix}
-            </p>
+        <div className="px-6 pb-5 border-t border-white/5 pt-4 flex flex-col gap-3">
+          <p className="text-sm text-zinc-500 leading-relaxed">{finding.description}</p>
+          <div className="flex items-start gap-3 bg-green-400/5 border border-green-400/10 rounded-lg px-4 py-3">
+            <span className="text-green-400 text-xs font-bold shrink-0 mt-0.5">FIX</span>
+            <p className="text-sm text-green-400 leading-relaxed">{finding.fix}</p>
           </div>
         </div>
       )}
