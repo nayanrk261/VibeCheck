@@ -6,28 +6,28 @@ function FindingCard({ finding }) {
   const [open, setOpen] = useState(false);
   const sev = finding.severity?.toUpperCase();
   const cfg = {
-    CRITICAL: { 
-      border: 'border-l-red-500 border-red-500/10', 
+    CRITICAL: {
+      border: 'border-l-red-500 border-red-500/10',
       tag: 'bg-red-500/10 text-red-400',
       dot: 'bg-red-500'
     },
-    HIGH: { 
-      border: 'border-l-orange-500 border-orange-500/10', 
+    HIGH: {
+      border: 'border-l-orange-500 border-orange-500/10',
       tag: 'bg-orange-500/10 text-orange-400',
       dot: 'bg-orange-500'
     },
-    MEDIUM: { 
-      border: 'border-l-yellow-500 border-yellow-500/10', 
+    MEDIUM: {
+      border: 'border-l-yellow-500 border-yellow-500/10',
       tag: 'bg-yellow-500/10 text-yellow-400',
       dot: 'bg-yellow-500'
     },
-    LOW: { 
-      border: 'border-l-blue-500 border-blue-500/10', 
+    LOW: {
+      border: 'border-l-blue-500 border-blue-500/10',
       tag: 'bg-blue-500/10 text-blue-400',
       dot: 'bg-blue-500'
     },
-    INFO: { 
-      border: 'border-l-zinc-600 border-zinc-800', 
+    INFO: {
+      border: 'border-l-zinc-600 border-zinc-800',
       tag: 'bg-zinc-800 text-zinc-500',
       dot: 'bg-zinc-600'
     },
@@ -55,6 +55,49 @@ function FindingCard({ finding }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// One row in the score breakdown. Handles three states:
+// - scored: normal bar + number
+// - no_data: feature exists, but there was nothing to measure (e.g. no live URL)
+// - coming_soon: feature isn't built yet
+function ScoreRow({ label, category }) {
+  const { value, status } = category || { value: null, status: 'no_data' };
+
+  if (status === 'coming_soon') {
+    return (
+      <div className="grid grid-cols-[120px_1fr_auto] items-center gap-5">
+        <span className="text-sm text-zinc-500">{label}</span>
+        <div className="h-[2px] bg-white/5 rounded-full" />
+        <span className="text-[10px] font-mono font-semibold text-right px-2 py-1 rounded bg-blue-500/10 text-blue-400 shrink-0">
+          COMING IN V2
+        </span>
+      </div>
+    );
+  }
+
+  if (status === 'no_data' || value == null) {
+    return (
+      <div className="grid grid-cols-[120px_1fr_auto] items-center gap-5">
+        <span className="text-sm text-zinc-500">{label}</span>
+        <div className="h-[2px] bg-white/5 rounded-full" />
+        <span className="text-[10px] font-mono text-zinc-600 text-right shrink-0">NOT ENOUGH DATA</span>
+      </div>
+    );
+  }
+
+  const barColor = value >= 70 ? 'bg-green-400' : value >= 40 ? 'bg-yellow-400' : 'bg-red-400';
+  const textColor = value >= 70 ? 'text-green-400' : value >= 40 ? 'text-yellow-400' : 'text-red-400';
+
+  return (
+    <div className="grid grid-cols-[120px_1fr_44px] items-center gap-5">
+      <span className="text-sm text-zinc-500">{label}</span>
+      <div className="h-[2px] bg-white/5 rounded-full overflow-hidden">
+        <div className={`h-full ${barColor} rounded-full`} style={{ width: `${value}%` }} />
+      </div>
+      <span className={`text-sm font-mono font-semibold text-right ${textColor}`}>{value}</span>
     </div>
   );
 }
@@ -98,31 +141,53 @@ export default function Result() {
     </div>
   );
 
+  const nav = (
+    <nav className="flex items-center justify-between px-8 md:px-16 py-5 border-b border-white/5 sticky top-0 bg-[#080808]/90 backdrop-blur z-10">
+      <button onClick={() => navigate('/')} className="text-xl font-black tracking-tight hover:opacity-70 transition-opacity">
+        Vibe<span className="text-green-400">Check</span>
+      </button>
+      <div className="text-xs text-zinc-600 border border-white/5 rounded-full px-4 py-1.5 font-mono">
+        {data?.repoUrl?.replace('https://github.com/', '') || data?.liveUrl || ''}
+      </div>
+    </nav>
+  );
+
+  // Genuinely nothing to audit — no repo, no reachable live URL. Show this
+  // instead of a confident-looking score built from zero real data.
+  if (data?.auditStatus === 'insufficient_data') {
+    return (
+      <div className="min-h-screen bg-[#080808] text-zinc-100 flex flex-col">
+        {nav}
+        <div className="flex-1 flex items-center justify-center px-8">
+          <div className="max-w-lg text-center">
+            <div className="inline-flex items-center gap-2 text-xs text-zinc-600 border border-white/5 rounded-full px-4 py-1.5 mb-8">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+              Security Audit Report
+            </div>
+            <p className="text-4xl font-black text-zinc-600 mb-4">Not enough data to audit</p>
+            <p className="text-sm text-zinc-500 leading-relaxed mb-8">
+              {data?.summary || "Neither the GitHub repo nor the live URL produced anything we could analyze. Double-check the URLs and try again."}
+            </p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-8 py-3.5 bg-green-400 hover:bg-green-300 text-black text-sm font-semibold rounded-xl transition-all cursor-pointer"
+            >
+              Try Another Audit →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const overall = data?.scores?.overall ?? 0;
-  const sec = data?.scores?.security ?? 0;
-  const code = data?.scores?.codeQuality ?? 0;
-  const ui = data?.scores?.uiUx ?? 0;
-  const perf = data?.scores?.performance ?? 0;
-
   const scoreColor = overall >= 70 ? '#22c55e' : overall >= 40 ? '#facc15' : '#f87171';
-  const barColor = (v) => v >= 70 ? 'bg-green-400' : v >= 40 ? 'bg-yellow-400' : 'bg-red-400';
-  const textColor = (v) => v >= 70 ? 'text-green-400' : v >= 40 ? 'text-yellow-400' : 'text-red-400';
-
   const riskLabel = overall >= 70 ? 'Low Risk' : overall >= 40 ? 'Medium Risk' : 'High Risk';
   const riskColor = overall >= 70 ? 'text-green-400' : overall >= 40 ? 'text-yellow-400' : 'text-red-400';
 
   return (
     <div className="min-h-screen bg-[#080808] text-zinc-100 flex flex-col">
-
-      {/* Nav */}
-      <nav className="flex items-center justify-between px-8 md:px-16 py-5 border-b border-white/5 sticky top-0 bg-[#080808]/90 backdrop-blur z-10">
-        <button onClick={() => navigate('/')} className="text-xl font-black tracking-tight hover:opacity-70 transition-opacity">
-          Vibe<span className="text-green-400">Check</span>
-        </button>
-        <div className="text-xs text-zinc-600 border border-white/5 rounded-full px-4 py-1.5 font-mono">
-          {data?.repoUrl?.replace('https://github.com/', '')}
-        </div>
-      </nav>
+      {nav}
 
       {/* HERO — Score + Bars */}
       <section className="w-full px-8 md:px-16 pt-12 pb-10 border-b border-white/5">
@@ -132,7 +197,6 @@ export default function Result() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-16 items-start">
-          {/* Score */}
           <div>
             <div className="font-black leading-none tracking-tighter" style={{ fontSize: '140px', color: scoreColor, lineHeight: 0.9 }}>
               {overall}
@@ -144,7 +208,6 @@ export default function Result() {
             </div>
           </div>
 
-          {/* Summary + Bars */}
           <div className="pt-2">
             {data?.summary && (
               <p className="text-sm text-zinc-500 leading-relaxed mb-8 pl-5 border-l border-white/5 max-w-3xl">
@@ -152,20 +215,10 @@ export default function Result() {
               </p>
             )}
             <div className="flex flex-col gap-5">
-              {[
-                ['Security', sec],
-                ['Code Quality', code],
-                ['UI / UX', ui],
-                ['Performance', perf],
-              ].map(([label, val]) => (
-                <div key={label} className="grid grid-cols-[120px_1fr_44px] items-center gap-5">
-                  <span className="text-sm text-zinc-500">{label}</span>
-                  <div className="h-[2px] bg-white/5 rounded-full overflow-hidden">
-                    <div className={`h-full ${barColor(val)} rounded-full`} style={{ width: `${val}%` }} />
-                  </div>
-                  <span className={`text-sm font-mono font-semibold text-right ${textColor(val)}`}>{val}</span>
-                </div>
-              ))}
+              <ScoreRow label="Security" category={data?.scores?.security} />
+              <ScoreRow label="Performance" category={data?.scores?.performance} />
+              <ScoreRow label="Code Quality" category={data?.scores?.codeQuality} />
+              <ScoreRow label="UI / UX" category={data?.scores?.uiUx} />
             </div>
           </div>
         </div>
@@ -173,18 +226,18 @@ export default function Result() {
 
       {/* STATS ROW */}
       <section className="grid grid-cols-2 md:grid-cols-4 border-b border-white/5">
-  {[
-    { val: data?.findings?.length ?? 0, label: 'ISSUES FOUND', color: 'text-red-400' },
-    { val: 0, label: 'SECRETS EXPOSED', color: 'text-green-400' },
-    { val: `${data?.meta?.responseTime ?? '--'}ms`, label: 'RESPONSE TIME', color: 'text-yellow-400' },
-    { val: data?.meta?.filesScanned ?? '--', label: 'FILES SCANNED', color: 'text-green-400' },
-  ].map((s, i) => (
-    <div key={i} className="px-8 md:px-16 py-7 border-r border-white/5 last:border-r-0">
-      <div className={`text-3xl font-bold mb-1.5 ${s.color}`}>{s.val}</div>
-      <div className="text-[10px] tracking-widest text-zinc-600">{s.label}</div>
-    </div>
-  ))}
-</section>
+        {[
+          { val: data?.findings?.length ?? 0, label: 'ISSUES FOUND', color: 'text-red-400' },
+          { val: data?.meta?.secretsFound ?? 0, label: 'SECRETS EXPOSED', color: (data?.meta?.secretsFound ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
+          { val: data?.meta?.responseTime != null ? `${data.meta.responseTime}ms` : '--', label: 'RESPONSE TIME', color: 'text-yellow-400' },
+          { val: data?.meta?.filesScanned ?? '--', label: 'FILES SCANNED', color: 'text-green-400' },
+        ].map((s, i) => (
+          <div key={i} className="px-8 md:px-16 py-7 border-r border-white/5 last:border-r-0">
+            <div className={`text-3xl font-bold mb-1.5 ${s.color}`}>{s.val}</div>
+            <div className="text-[10px] tracking-widest text-zinc-600">{s.label}</div>
+          </div>
+        ))}
+      </section>
 
       {/* FINDINGS */}
       {data?.findings?.length > 0 && (

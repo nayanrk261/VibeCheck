@@ -74,7 +74,14 @@ const handleSubmit = async (e) => {
         setTimeout(() => navigate(`/result/${id}`), 800);
     } catch (err) {
         clearInterval(interval);
-        setError('Audit failed. Check your URLs and try again.');
+        // Surface the backend's actual message when we have one (rate limit,
+        // validation error, SSRF block, etc.) instead of a generic string
+        // that hides what actually went wrong.
+        // Show the specific reason first (e.g. "repoUrl must be a valid
+        // github.com repository URL") — the generic "error" label alone
+        // isn't actionable on its own.
+        const backendMessage = err.response?.data?.details?.[0] || err.response?.data?.error;
+        setError(backendMessage || 'Audit failed. Check your URLs and try again.');
         setScanning(false);
         setProgress(0);
         setLogs([]);

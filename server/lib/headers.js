@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { assertPublicUrl } = require('./ssrfGuard');
 
 const SECURITY_HEADERS = [
     {
@@ -25,12 +26,29 @@ const SECURITY_HEADERS = [
 
 const analyzeHeaders = async (url) => {
     const findings = [];
+
+    // Block requests to private/internal/metadata addresses before we ever
+    // touch the network. See ssrfGuard.js for why this exists.
+    let safeUrl;
+    try {
+        safeUrl = await assertPublicUrl(url);
+    } catch (err) {
+        return {
+            error: true,
+            message: err.message,
+            findings: [],
+            responseTime: null,
+            httpsUsed: url.startsWith("https://")
+        };
+    }
+
     const startTime = Date.now();
 
     let response;
     try{
-        response = await axios.get(url, {
+        response = await axios.get(safeUrl, {
             timeout : 10000,
+            maxRedirects: 3,
             validateStatus : () => true
         });
     }
