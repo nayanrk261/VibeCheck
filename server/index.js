@@ -43,12 +43,20 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Fail fast if critical env vars are missing instead of limping along.
-const required = ['MONGODB_URI', 'GROQ_API_KEY'];
+// Fail fast only on config that's truly fatal — nothing works without a DB.
+const required = ['MONGODB_URI'];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length) {
     console.error(`Missing required environment variables: ${missing.join(', ')}`);
     process.exit(1);
+}
+
+// GROQ_API_KEY is important but not boot-fatal: if it's missing, every
+// audit's AI summary call will fail and fall back to a templated summary
+// (see auditController.js / scoring.js buildFallbackSummary) instead of
+// the whole audit failing. Warn loudly so it doesn't go unnoticed.
+if (!process.env.GROQ_API_KEY) {
+    console.warn("GROQ_API_KEY is not set — audits will still run, but summaries will use a generic fallback instead of an AI-written one.");
 }
 
 app.listen(PORT, () => {

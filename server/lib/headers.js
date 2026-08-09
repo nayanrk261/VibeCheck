@@ -100,6 +100,16 @@ const analyzeHeaders = async (url) => {
         });
     }
 
+    if(headers["x-powered-by"]){
+        findings.push({
+            type: "Information Disclosure",
+            severity: "LOW",
+            header: "x-powered-by",
+            description: `Server reveals its technology stack via X-Powered-By: ${headers["x-powered-by"]} — this makes it easier for an attacker to target known vulnerabilities for that stack.`,
+            fix: "Disable the X-Powered-By header — app.disable('x-powered-by') in Express, or let helmet remove it automatically."
+        });
+    }
+
     return {
         error: false,
         responseTime,

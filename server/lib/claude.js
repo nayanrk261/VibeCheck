@@ -3,6 +3,14 @@ const { z } = require("zod");
 
 // NOTE: named claude.js for historical reasons but calls Groq's
 // OpenAI-compatible chat completions API, not Anthropic's.
+//
+// This module's job is now deliberately narrow: write a short, accurate
+// summary and a couple of supplementary positives. It does NOT score
+// anything and does NOT invent findings — those are fully deterministic
+// (see scanner.js, dependencyCheck.js, exposureCheck.js, scoring.js) because
+// asking an LLM to re-derive facts we already know precisely just
+// introduces inconsistency (see: the same secret being called three
+// different things across three runs).
 
 const isRetryable = (err) => {
     const status = err.response?.status;
@@ -16,8 +24,8 @@ const callClaude = async (prompt, retries = 3) => {
             {
                 model: "llama-3.1-8b-instant",
                 messages: [{ role: "user", content: prompt }],
-                max_tokens: 2000,
-                temperature: 0, // deterministic output — same input, same score, every time
+                max_tokens: 800,
+                temperature: 0,
                 response_format: { type: "json_object" }
             },
             {
@@ -39,72 +47,56 @@ const callClaude = async (prompt, retries = 3) => {
 };
 
 const describeHeaderStatus = (headerData) => {
-    if (!headerData || (!headerData.error && headerData.responseTime == null && !headerData.findings?.length && !headerData.httpsUsed)) {
+    if (!headerData || (!headerData.error && headerData.responseTime == null)) {
         return "No live URL was provided.";
     }
     if (headerData.error) {
         return `The live URL could NOT be scanned. Reason: "${headerData.message}".`;
     }
-    return `Live URL was reached successfully. HTTPS used: ${headerData.httpsUsed}. Missing headers: ${headerData.findings.map(f => f.header).join(", ") || "none"}.`;
+    return `Live URL was reached successfully. HTTPS used: ${headerData.httpsUsed}.`;
 };
 
-const buildPrompt = (githubData, scanData, headerData) => {
-    const hasRepoData = githubData.fileCount > 0;
-    const hasLiveData = headerData && !headerData.error && headerData.responseTime != null;
+// context = { githubData, headerData, securityScore, performanceScore, findings }
+const buildPrompt = (context) => {
+    const { githubData, headerData, securityScore, performanceScore, findings } = context;
+
+    const findingsList = findings.length
+        ? findings.map(f => `- [${f.severity}] ${f.title} (${f.category})`).join("\n")
+        : "None.";
 
     return `
-You are a senior security engineer reviewing a vibe-coded web application.
+You are a senior security engineer writing the summary paragraph for an
+already-completed audit. All scoring and finding detection is done — do not
+invent, restate with different wording, or contradict any of it. Your only
+job is a short, accurate summary and, optionally, 1-3 additional positive
+notes not already implied by the findings list.
 
-Only score and report what you have actual data for. Never invent a value
-to fill a gap. Code quality and UI/UX are scored elsewhere in this system —
-do not mention or score them.
+ALREADY COMPUTED (treat as ground truth):
+- Security score: ${securityScore ?? "not scored — insufficient data"}
+- Performance score: ${performanceScore ?? "not scored — insufficient data"}
+- Findings (${findings.length} total):
+${findingsList}
 
-GITHUB ANALYSIS:
-- Repo analyzed: ${hasRepoData ? "yes" : "no"}
-- Tech Stack: ${githubData.techStack.join(", ") || "Unknown"}
-- Files Analyzed: ${githubData.fileCount}
+CONTEXT:
+- GitHub: ${githubData.fileCount} files analyzed, tech stack: ${githubData.techStack.join(", ") || "unknown"}
+- Live URL status: ${describeHeaderStatus(headerData)}
 
-SECRET SCAN:
-- Secrets Found: ${scanData.secrets.length}
-- Types: ${scanData.secrets.map(s => s.type).join(', ') || 'None'}
-- ENV Check: ${scanData.envCheck.message}
-- Note: If .env is not in repo, it means it's properly gitignored. Do NOT flag this as an issue.
-
-LIVE URL / HEADER ANALYSIS:
-${describeHeaderStatus(headerData)}
-
-SCORING RULE:
-${hasRepoData || hasLiveData
-        ? `Score "securityScore" 0-100 based ONLY on: secrets found, missing/present security headers, and HTTPS usage from the data above.`
-        : `Neither the repo nor the live URL produced any usable data. Set "securityScore" to null (not a number, not 0). In the summary, clearly say there wasn't enough data to audit this submission — do not describe a security posture that wasn't actually assessed.`
-    }
-
-Return ONLY valid JSON — no markdown, no extra text:
+Return ONLY valid JSON, no markdown:
 {
-    "securityScore": <integer 0-100, or null if no data was available>,
-    "summary": "<2-3 sentences reflecting only what was actually analyzed>",
-    "findings": [{ "title": "", "severity": "HIGH", "category": "", "description": "", "fix": "" }],
-    "positives": [""]
+    "summary": "<2-3 sentences, must be consistent with the scores and findings above>",
+    "positives": ["<optional additional positive notes — empty array if none apply>"]
 }
 `;
 };
 
 const aiResponseSchema = z.object({
-    securityScore: z.number().min(0).max(100).nullable(),
     summary: z.string().min(1),
-    findings: z.array(z.object({
-        title: z.string().min(1).catch("Untitled finding"),
-        severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]).catch("INFO"),
-        category: z.string().optional().default(""),
-        description: z.string().optional().default(""),
-        fix: z.string().optional().default(""),
-    })).default([]),
     positives: z.array(z.string()).default([]),
 });
 
-const analyzeWithAI = async (githubData, scanData, headerData) => {
+const analyzeWithAI = async (context) => {
     try {
-        const prompt = buildPrompt(githubData, scanData, headerData);
+        const prompt = buildPrompt(context);
         const rawResponse = await callClaude(prompt);
 
         const cleaned = rawResponse.replace(/```json|```/g, "").trim();
@@ -121,23 +113,7 @@ const analyzeWithAI = async (githubData, scanData, headerData) => {
             throw new Error(`AI response failed validation: ${validated.error.issues.map(i => i.message).join("; ")}`);
         }
 
-        const data = validated.data;
-
-        if (data.securityScore != null) {
-            data.securityScore = Math.round(data.securityScore);
-        }
-
-        if (headerData?.error) {
-            data.findings.push({
-                title: "Live URL could not be scanned",
-                severity: "INFO",
-                category: "Availability",
-                description: headerData.message || "The provided live URL could not be reached or is not a scannable public address.",
-                fix: "Double-check the URL is correct, publicly reachable, and not pointing at an internal/private address."
-            });
-        }
-
-        return { success: true, data };
+        return { success: true, data: validated.data };
     }
     catch (err) {
         return {

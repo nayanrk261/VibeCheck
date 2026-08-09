@@ -1,8 +1,10 @@
 const { parseGithubUrl, fetchRepoTree, fetchFileContent, detectTechStack } = require("../lib/github");
 const { scanRepo } = require("../lib/scanner");
 const { analyzeHeaders } = require("../lib/headers");
+const { checkExposedFiles } = require("../lib/exposureCheck");
+const { mapHeaderFindings } = require("../lib/findings");
 const { analyzeWithAI } = require("../lib/claude");
-const { scorePerformance, computeOverall } = require("../lib/scoring");
+const { scorePerformance, scoreSecurity, computeOverall, buildFallbackSummary } = require("../lib/scoring");
 const Submission = require("../models/Submission");
 
 const runAudit = async (req, res) => {
@@ -11,7 +13,7 @@ const runAudit = async (req, res) => {
         const { repoUrl, liveUrl } = req.body;
 
         let githubData = { owner: '', repo: '', techStack: [], fileCount: 0 };
-        let scanData = { secrets: [], envCheck: { message: 'No repo provided' }, filesScanned: 0 };
+        let scanData = { secrets: [], findings: [], positives: [], envCheck: { message: 'No repo provided' }, filesScanned: 0 };
 
         if (repoUrl) {
             const { owner, repo } = parseGithubUrl(repoUrl);
@@ -26,36 +28,72 @@ const runAudit = async (req, res) => {
             ? await analyzeHeaders(liveUrl)
             : { responseTime: null, httpsUsed: false, findings: [], error: false };
 
-        const aiResult = await analyzeWithAI(githubData, scanData, headerData);
+        // Only probe for exposed .env/.git if the live URL was actually
+        // reachable — no point checking a blocked/unreachable target twice.
+        const exposureFindings = (liveUrl && !headerData.error)
+            ? await checkExposedFiles(liveUrl)
+            : [];
 
-        if (!aiResult.success) {
-            console.error("AI analysis failed:", aiResult.error);
-            return res.status(502).json({ error: "AI analysis is temporarily unavailable. Please try again shortly." });
+        const hasRepoData = githubData.fileCount > 0;
+        const hasLiveData = !!liveUrl && !headerData.error;
+
+        // Every finding here is deterministic — built from real scan data,
+        // not paraphrased or invented by the AI.
+        const deterministicFindings = [
+            ...scanData.findings,
+            ...mapHeaderFindings(headerData),
+            ...exposureFindings,
+        ];
+
+        if (headerData.error) {
+            deterministicFindings.push({
+                title: "Live URL could not be scanned",
+                severity: "INFO",
+                category: "Availability",
+                description: headerData.message || "The provided live URL could not be reached or is not a scannable public address.",
+                fix: "Double-check the URL is correct, publicly reachable, and not pointing at an internal/private address."
+            });
         }
 
-        // Security: AI-scored, grounded in secrets + header data (or null
-        // if there was genuinely nothing to work from).
-        const securityValue = aiResult.data.securityScore;
-        const security = { value: securityValue, status: securityValue == null ? "no_data" : "scored" };
-
-        // Performance: computed deterministically from measured response time.
+        const security = scoreSecurity(deterministicFindings, hasRepoData, hasLiveData);
         const performance = scorePerformance(headerData);
-
-        // Code Quality / UI-UX: not built yet — always "coming_soon", never guessed.
         const codeQuality = { value: null, status: "coming_soon" };
         const uiUx = { value: null, status: "coming_soon" };
 
         const overall = computeOverall(security.value, performance.value);
         const auditStatus = overall == null ? "insufficient_data" : "scored";
 
+        const aiResult = await analyzeWithAI({
+            githubData,
+            headerData,
+            securityScore: security.value,
+            performanceScore: performance.value,
+            findings: deterministicFindings,
+        });
+
+        // The AI only writes the narrative — if it fails, fall back to a
+        // templated summary instead of failing the whole audit. Every
+        // number and finding at this point is already real and saved either way.
+        let summary, aiPositives;
+        if (aiResult.success) {
+            summary = aiResult.data.summary;
+            aiPositives = aiResult.data.positives;
+        } else {
+            console.error("AI summary generation failed (falling back to templated summary):", aiResult.error);
+            summary = buildFallbackSummary(security, performance, deterministicFindings);
+            aiPositives = [];
+        }
+
+        const positives = [...scanData.positives, ...aiPositives];
+
         const submission = new Submission({
             repoUrl: repoUrl || '',
             liveUrl: liveUrl || '',
             scores: { security, performance, codeQuality, uiUx, overall },
             auditStatus,
-            summary: aiResult.data.summary || '',
-            findings: aiResult.data.findings || [],
-            positives: aiResult.data.positives || [],
+            summary,
+            findings: deterministicFindings,
+            positives,
             meta: {
                 techStack: githubData.techStack,
                 filesScanned: scanData.filesScanned,
