@@ -19,6 +19,7 @@ const SCAN_STEPS = [
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [liveUrl, setLiveUrl] = useState('');
+  const [auditMode, setAuditMode] = useState('core');
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -65,7 +66,7 @@ const handleSubmit = async (e) => {
     }, 600);
 
     try {
-        const result = await submitAudit(finalRepo, finalLive);
+        const result = await submitAudit(finalRepo, finalLive, auditMode);
         clearInterval(interval);
         setProgress(100);
         setProgressLabel('Report ready!');
@@ -169,6 +170,26 @@ const handleSubmit = async (e) => {
               </div>
               <p className="text-[11px] text-zinc-700">At least one URL is required. Both recommended for full audit.</p>
             </div>
+
+            {/* Audit mode toggle */}
+            <button
+              type="button"
+              onClick={() => setAuditMode(m => m === 'core' ? 'production' : 'core')}
+              disabled={scanning}
+              className={`w-full flex items-center justify-between gap-4 rounded-xl px-5 py-4 border transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed ${
+                auditMode === 'production'
+                  ? 'bg-green-400/5 border-green-400/25'
+                  : 'bg-[#080808] border-white/5 hover:border-white/10'
+              }`}
+            >
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Production Readiness Audit</p>
+                <p className="text-xs text-zinc-600 mt-0.5">Also checks for a privacy policy, terms of service, and cookie consent on your live URL — separate from the security score.</p>
+              </div>
+              <div className={`shrink-0 w-11 h-6 rounded-full relative transition-colors ${auditMode === 'production' ? 'bg-green-400' : 'bg-zinc-800'}`}>
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-black transition-all ${auditMode === 'production' ? 'left-[22px]' : 'left-0.5'}`} />
+              </div>
+            </button>
 
             {error && (
               <div className="bg-red-500/5 border border-red-500/15 rounded-xl px-4 py-3 text-sm text-red-400 flex items-center gap-2">

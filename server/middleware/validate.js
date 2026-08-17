@@ -15,6 +15,7 @@ const auditSchema = z
       .optional()
       .or(z.literal("")),
     liveUrl: z.string().trim().max(300).url().optional().or(z.literal("")),
+    auditMode: z.enum(["core", "production"]).optional().default("core"),
   })
   .refine((data) => (data.repoUrl && data.repoUrl.length > 0) || (data.liveUrl && data.liveUrl.length > 0), {
     message: "At least one of repoUrl or liveUrl is required",

@@ -42,6 +42,23 @@ function computeOverall(...values) {
   return Math.round(parts.reduce((a, b) => a + b, 0) / parts.length);
 }
 
+// Readiness is Track 2's score — deliberately a SEPARATE category set from
+// Security. A secure-but-not-launch-ready app shouldn't look insecure, and
+// vice versa. Never feeds into computeOverall.
+const READINESS_CATEGORIES = new Set(["Legal", "Integrations", "SEO"]);
+
+function scoreReadiness(findings, hasLiveData) {
+  if (!hasLiveData) return { value: null, status: "no_data" };
+
+  let score = 100;
+  for (const f of findings) {
+    if (!READINESS_CATEGORIES.has(f.category)) continue;
+    score -= SEVERITY_WEIGHT[f.severity] ?? 0;
+  }
+  score = Math.max(0, Math.min(100, score));
+  return { value: score, status: "scored" };
+}
+
 // Used only if the AI summary call fails outright (Groq down, malformed
 // response after retries, etc.) so a single audit never fully fails just
 // because the narrative-writing step couldn't run — every number and
@@ -61,4 +78,4 @@ function buildFallbackSummary(security, performance, findings) {
   return text;
 }
 
-module.exports = { scorePerformance, scoreSecurity, computeOverall, buildFallbackSummary };
+module.exports = { scorePerformance, scoreSecurity, scoreReadiness, computeOverall, buildFallbackSummary };

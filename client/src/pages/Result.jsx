@@ -217,6 +217,9 @@ export default function Result() {
             <div className="flex flex-col gap-5">
               <ScoreRow label="Security" category={data?.scores?.security} />
               <ScoreRow label="Performance" category={data?.scores?.performance} />
+              {data?.auditMode === 'production' && (
+                <ScoreRow label="Readiness" category={data?.scores?.readiness} />
+              )}
               <ScoreRow label="Code Quality" category={data?.scores?.codeQuality} />
               <ScoreRow label="UI / UX" category={data?.scores?.uiUx} />
             </div>
@@ -239,15 +242,32 @@ export default function Result() {
         ))}
       </section>
 
-      {/* FINDINGS */}
-      {data?.findings?.length > 0 && (
+      {/* FINDINGS — Security (Track 1) */}
+      {data?.findings?.filter(f => f.track !== 'readiness').length > 0 && (
         <section className="px-8 md:px-16 py-10 border-b border-white/5">
           <div className="flex items-center justify-between mb-6">
-            <p className="text-[10px] tracking-widest text-zinc-600">FINDINGS</p>
-            <p className="text-[10px] text-zinc-700">{data.findings.length} issue{data.findings.length !== 1 ? 's' : ''}</p>
+            <p className="text-[10px] tracking-widest text-zinc-600">SECURITY FINDINGS</p>
+            <p className="text-[10px] text-zinc-700">
+              {data.findings.filter(f => f.track !== 'readiness').length} issue{data.findings.filter(f => f.track !== 'readiness').length !== 1 ? 's' : ''}
+            </p>
           </div>
           <div className="flex flex-col gap-2">
-            {data.findings.map((f, i) => <FindingCard key={i} finding={f} />)}
+            {data.findings.filter(f => f.track !== 'readiness').map((f, i) => <FindingCard key={i} finding={f} />)}
+          </div>
+        </section>
+      )}
+
+      {/* FINDINGS — Production Readiness (Track 2) */}
+      {data?.auditMode === 'production' && data?.findings?.filter(f => f.track === 'readiness').length > 0 && (
+        <section className="px-8 md:px-16 py-10 border-b border-white/5">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-[10px] tracking-widest text-zinc-600">PRODUCTION READINESS FINDINGS</p>
+            <p className="text-[10px] text-zinc-700">
+              {data.findings.filter(f => f.track === 'readiness').length} issue{data.findings.filter(f => f.track === 'readiness').length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            {data.findings.filter(f => f.track === 'readiness').map((f, i) => <FindingCard key={i} finding={f} />)}
           </div>
         </section>
       )}

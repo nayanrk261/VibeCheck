@@ -56,13 +56,21 @@ const describeHeaderStatus = (headerData) => {
     return `Live URL was reached successfully. HTTPS used: ${headerData.httpsUsed}.`;
 };
 
-// context = { githubData, headerData, securityScore, performanceScore, findings }
+// context = { githubData, headerData, securityScore, performanceScore, findings, readinessScore? }
 const buildPrompt = (context) => {
-    const { githubData, headerData, securityScore, performanceScore, findings } = context;
+    const { githubData, headerData, securityScore, performanceScore, findings, readinessScore, filesScanned } = context;
 
     const findingsList = findings.length
         ? findings.map(f => `- [${f.severity}] ${f.title} (${f.category})`).join("\n")
         : "None.";
+
+    const readinessLine = readinessScore !== undefined
+        ? `\n- Production Readiness score: ${readinessScore ?? "not scored — insufficient data"} (separate from Security — covers legal/compliance/integration basics, not code security)`
+        : "";
+
+    const githubLine = githubData.fileCount > 0
+        ? `- GitHub: repo contains ${githubData.fileCount} files total; the ${filesScanned ?? githubData.fileCount} most security-relevant were scanned (auth/config/routes prioritized). Do NOT describe this as a "thorough" or "complete" analysis of the whole repo — say how many were actually scanned if you mention it.`
+        : "- GitHub: no repo was analyzed.";
 
     return `
 You are a senior security engineer writing the summary paragraph for an
@@ -73,12 +81,13 @@ notes not already implied by the findings list.
 
 ALREADY COMPUTED (treat as ground truth):
 - Security score: ${securityScore ?? "not scored — insufficient data"}
-- Performance score: ${performanceScore ?? "not scored — insufficient data"}
+- Performance score: ${performanceScore ?? "not scored — insufficient data"}${readinessLine}
 - Findings (${findings.length} total):
 ${findingsList}
 
 CONTEXT:
-- GitHub: ${githubData.fileCount} files analyzed, tech stack: ${githubData.techStack.join(", ") || "unknown"}
+${githubLine}
+- Tech stack: ${githubData.techStack.join(", ") || "unknown"}
 - Live URL status: ${describeHeaderStatus(headerData)}
 
 Return ONLY valid JSON, no markdown:

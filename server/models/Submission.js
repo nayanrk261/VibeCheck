@@ -9,8 +9,19 @@ const findingSchema = new mongoose.Schema({
     },
     category: { type: String, default: '' },
     description: { type: String, default: '' },
-    fix: { type: String, default: '' }
+    fix: { type: String, default: '' },
+    // "core" = Track 1 (security/code). "readiness" = Track 2 (production readiness).
+    track: { type: String, enum: ["core", "readiness"], default: "core" }
 });
+
+// Manual-confirmation checklist items — things we can't verify
+// automatically (e.g. "does your OAuth login actually complete"). Checked
+// state is NOT stored here; the client persists that in localStorage.
+const checklistItemSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    label: { type: String, required: true },
+    description: { type: String, default: '' }
+}, { _id: false });
 
 // {value, status} instead of a bare number so the UI can distinguish
 // "scored", "no_data" (feature exists, but no input to work from), and
@@ -33,11 +44,16 @@ const submissionSchema = new mongoose.Schema({
         ref: "User",
         required: false
     },
+    // "core" = Track 1 only. "production" = Track 1 + Track 2 readiness checks.
+    auditMode: { type: String, enum: ["core", "production"], default: "core" },
     scores: {
         security: { type: scoreCategorySchema, default: () => ({}) },
         performance: { type: scoreCategorySchema, default: () => ({}) },
         codeQuality: { type: scoreCategorySchema, default: () => ({ status: "coming_soon" }) },
         uiUx: { type: scoreCategorySchema, default: () => ({ status: "coming_soon" }) },
+        // Only populated when auditMode === "production". Deliberately
+        // separate from security/overall — see scoring.js.
+        readiness: { type: scoreCategorySchema, default: () => ({}) },
         overall: { type: Number, default: null }
     },
     // "scored" = we have an overall number. "insufficient_data" = neither
@@ -50,6 +66,7 @@ const submissionSchema = new mongoose.Schema({
     summary: { type: String, default: '' },
     findings: [findingSchema],
     positives: [String],
+    checklist: [checklistItemSchema],
     meta: {
         techStack: [String],
         filesScanned: { type: Number, default: 0 },

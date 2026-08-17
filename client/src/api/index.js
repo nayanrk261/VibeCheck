@@ -2,10 +2,11 @@ import axios from 'axios';
 
 const API_BASE = 'http://localhost:5000/api';
 
-export const submitAudit = async (repoUrl, liveUrl) => {
+export const submitAudit = async (repoUrl, liveUrl, auditMode = 'core') => {
     const response = await axios.post(`${API_BASE}/audit`, {
         repoUrl,
-        liveUrl
+        liveUrl,
+        auditMode
     });
     return response.data;
 };
