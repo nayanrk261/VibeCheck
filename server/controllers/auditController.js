@@ -1,12 +1,15 @@
-const { parseGithubUrl, fetchRepoTree, fetchFileContent, detectTechStack } = require("../lib/github");
+const github = require("../lib/github");
 const { scanRepo } = require("../lib/scanner");
 const { analyzeHeaders } = require("../lib/headers");
 const { checkExposedFiles } = require("../lib/exposureCheck");
 const { mapHeaderFindings } = require("../lib/findings");
 const { checkLegalPages } = require("../lib/legalCheck");
+const { checkAuthAndPayments, checkAnalytics } = require("../lib/integrationCheck");
+const { checkRobotsAndSitemap, checkMetaTags } = require("../lib/seoCheck");
+const { fetchLiveHtml } = require("../lib/liveHtmlFetch");
 const { analyzeWithAI } = require("../lib/claude");
 const { scorePerformance, scoreSecurity, scoreReadiness, computeOverall, buildFallbackSummary } = require("../lib/scoring");
-const Submission = require("../models/Submission");
+const { saveSubmission } = require("../lib/submissionStore");
 
 const runAudit = async (req, res) => {
     try {
@@ -14,14 +17,14 @@ const runAudit = async (req, res) => {
         const { repoUrl, liveUrl, auditMode } = req.body;
 
         let githubData = { owner: '', repo: '', techStack: [], fileCount: 0 };
-        let scanData = { secrets: [], findings: [], positives: [], envCheck: { message: 'No repo provided' }, filesScanned: 0 };
+        let scanData = { secrets: [], findings: [], positives: [], envCheck: { message: 'No repo provided' }, filesScanned: 0, dependencies: {}, fileContents: [] };
 
         if (repoUrl) {
-            const { owner, repo } = parseGithubUrl(repoUrl);
-            const files = await fetchRepoTree(owner, repo);
-            const techStack = detectTechStack(files);
+            const { owner, repo } = github.parseGithubUrl(repoUrl);
+            const files = await github.fetchRepoTree(owner, repo);
+            const techStack = github.detectTechStack(files);
             githubData = { owner, repo, techStack, fileCount: files.length };
-            scanData = await scanRepo(files, fetchFileContent, owner, repo);
+            scanData = await scanRepo(files, github.fetchFileContent, owner, repo);
         }
 
         // liveUrl is passed through the SSRF guard inside analyzeHeaders
@@ -57,23 +60,44 @@ const runAudit = async (req, res) => {
             });
         }
 
-        // Track 2 (readiness) findings — only run in production mode, and
-        // only against a live URL that's actually reachable.
+        // Track 2 (readiness) findings — only run in production mode.
         let readinessFindings = [];
         let readinessChecked = false;
-        if (auditMode === "production" && hasLiveData) {
-            const legalResult = await checkLegalPages(liveUrl);
-            readinessFindings.push(...legalResult.findings);
-            readinessChecked = legalResult.checked;
-            if (!readinessChecked) {
-                console.error("Readiness check (legalCheck) failed to complete for", liveUrl);
-                readinessFindings.push({
-                    title: "Production readiness check could not be completed",
-                    severity: "INFO",
-                    category: "Legal",
-                    description: "We couldn't fetch and analyze your live URL for legal/compliance signals this time (network issue or timeout) — this is not a finding about your app, just a failed check.",
-                    fix: "Try running the audit again."
-                });
+
+        if (auditMode === "production") {
+            // Repo-based — no live URL needed.
+            if (hasRepoData) {
+                readinessFindings.push(...checkAuthAndPayments(scanData.dependencies, scanData.fileContents));
+            }
+
+            // Live-URL-based — fetch the homepage HTML ONCE and share it
+            // across every check that needs it, so they all see the same
+            // snapshot instead of racing separate requests against a
+            // possibly-inconsistent CDN cache. robots.txt/sitemap.xml are
+            // different paths so they need their own request — run that
+            // in parallel rather than stacking latency.
+            if (hasLiveData) {
+                const [{ html, fetched }, robotsSitemapResult] = await Promise.all([
+                    fetchLiveHtml(liveUrl),
+                    checkRobotsAndSitemap(liveUrl),
+                ]);
+                readinessChecked = fetched;
+                readinessFindings.push(...robotsSitemapResult.findings);
+
+                if (fetched) {
+                    readinessFindings.push(...checkLegalPages(html).findings);
+                    readinessFindings.push(...checkAnalytics(html));
+                    readinessFindings.push(...checkMetaTags(html));
+                } else {
+                    console.error("Readiness page fetch failed for", liveUrl);
+                    readinessFindings.push({
+                        title: "Production readiness check could not be completed",
+                        severity: "INFO",
+                        category: "Legal",
+                        description: "We couldn't fetch and analyze your live URL for legal/compliance/analytics/SEO signals this time (network issue or timeout) — this is not a finding about your app, just a failed check.",
+                        fix: "Try running the audit again."
+                    });
+                }
             }
         }
         readinessFindings = readinessFindings.map(f => ({ ...f, track: "readiness" }));
@@ -82,8 +106,12 @@ const runAudit = async (req, res) => {
         const performance = scorePerformance(headerData);
         const codeQuality = { value: null, status: "coming_soon" };
         const uiUx = { value: null, status: "coming_soon" };
+
+        // Readiness "checked" now covers repo-based OR live-based signals —
+        // if we got useful data from either source, it's a real score.
+        const readinessHasData = (auditMode === "production") && (hasRepoData || readinessChecked);
         const readiness = auditMode === "production"
-            ? scoreReadiness(readinessFindings, readinessChecked)
+            ? scoreReadiness(readinessFindings, readinessHasData)
             : { value: null, status: "no_data" };
 
         // Overall is Track 1 only, on purpose — readiness never affects it.
@@ -117,7 +145,7 @@ const runAudit = async (req, res) => {
 
         const positives = [...scanData.positives, ...aiPositives];
 
-        const submission = new Submission({
+        const savedSubmission = await saveSubmission({
             repoUrl: repoUrl || '',
             liveUrl: liveUrl || '',
             auditMode,
@@ -129,8 +157,13 @@ const runAudit = async (req, res) => {
             checklist: [], // wired up in the next batch
             meta: {
                 techStack: githubData.techStack,
+                filesDiscovered: scanData.meta?.filesDiscovered || githubData.fileCount,
+                filesSelected: scanData.meta?.filesSelected || githubData.fileCount,
                 filesScanned: scanData.filesScanned,
-                secretsFound: scanData.secrets.length,
+                filesSkipped: scanData.meta?.filesSkipped || 0,
+                skipReasons: scanData.meta?.skipReasons || {},
+                totalScannedBytes: scanData.meta?.totalScannedBytes || 0,
+                secretsFound: scanData.secrets ? scanData.secrets.length : 0,
                 responseTime: headerData.responseTime,
                 httpsUsed: headerData.httpsUsed
             },
@@ -138,19 +171,17 @@ const runAudit = async (req, res) => {
             isApproved: false
         });
 
-        await submission.save();
-
         res.status(201).json({
             success: true,
-            submissionId: submission._id,
-            auditMode: submission.auditMode,
-            scores: submission.scores,
-            auditStatus: submission.auditStatus,
-            summary: submission.summary,
-            findings: submission.findings,
-            positives: submission.positives,
-            checklist: submission.checklist,
-            meta: submission.meta
+            submissionId: savedSubmission._id,
+            auditMode: savedSubmission.auditMode,
+            scores: savedSubmission.scores,
+            auditStatus: savedSubmission.auditStatus,
+            summary: savedSubmission.summary,
+            findings: savedSubmission.findings,
+            positives: savedSubmission.positives,
+            checklist: savedSubmission.checklist,
+            meta: savedSubmission.meta
         });
 
     } catch (err) {

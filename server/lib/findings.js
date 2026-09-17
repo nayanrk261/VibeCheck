@@ -21,12 +21,22 @@ function mapHeaderFindings(headerData) {
             title = `Server discloses tech stack via ${f.header}`;
         }
 
+        const evidence = f.type === "Missing Security Header"
+            ? `Missing ${f.header} response header`
+            : f.description;
+
         return {
             title,
             severity: f.severity,
             category,
             description: f.description,
             fix: f.fix,
+            file: null,
+            line: null,
+            column: null,
+            evidence,
+            confidence: "HIGH",
+            status: "CONFIRMED"
         };
     });
 }

@@ -10,6 +10,12 @@ const findingSchema = new mongoose.Schema({
     category: { type: String, default: '' },
     description: { type: String, default: '' },
     fix: { type: String, default: '' },
+    file: { type: String, default: null },
+    line: { type: Number, default: null },
+    column: { type: Number, default: null },
+    evidence: { type: String, default: '' },
+    confidence: { type: String, enum: ["HIGH", "MEDIUM", "LOW"], default: "HIGH" },
+    status: { type: String, enum: ["CONFIRMED", "REVIEW"], default: "CONFIRMED" },
     // "core" = Track 1 (security/code). "readiness" = Track 2 (production readiness).
     track: { type: String, enum: ["core", "readiness"], default: "core" }
 });
@@ -69,7 +75,12 @@ const submissionSchema = new mongoose.Schema({
     checklist: [checklistItemSchema],
     meta: {
         techStack: [String],
+        filesDiscovered: { type: Number, default: 0 },
+        filesSelected: { type: Number, default: 0 },
         filesScanned: { type: Number, default: 0 },
+        filesSkipped: { type: Number, default: 0 },
+        skipReasons: { type: mongoose.Schema.Types.Mixed, default: {} },
+        totalScannedBytes: { type: Number, default: 0 },
         secretsFound: { type: Number, default: 0 },
         responseTime: { type: Number, default: null },
         httpsUsed: { type: Boolean, default: false }

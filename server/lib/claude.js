@@ -22,7 +22,7 @@ const callClaude = async (prompt, retries = 3) => {
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
-                model: "llama-3.1-8b-instant",
+                model: "groq/compound-mini",
                 messages: [{ role: "user", content: prompt }],
                 max_tokens: 800,
                 temperature: 0,

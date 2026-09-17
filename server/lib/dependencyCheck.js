@@ -61,6 +61,12 @@ async function checkDependencies(deps, ecosystem = "npm") {
                 fix: `Update ${pkg.name} to a patched version. See: ${topIds
                     .map((id) => `https://osv.dev/vulnerability/${id}`)
                     .join(", ")}`,
+                file: "package.json",
+                line: null,
+                column: null,
+                evidence: `Package: ${pkg.name}@${pkg.version} (Advisories: ${topIds.join(", ")})`,
+                confidence: "HIGH",
+                status: "CONFIRMED"
             });
         });
     }

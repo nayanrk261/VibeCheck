@@ -1,7 +1,4 @@
-const axios = require("axios");
-const { assertPublicUrl } = require("./ssrfGuard");
-
-// Crawls the live URL's homepage HTML for links/references to a privacy
+// Checks pre-fetched homepage HTML for links/references to a privacy
 // policy, terms of service, and a cookie-consent mechanism. This is
 // PRESENCE detection, not legal review — it tells you whether the basics
 // exist, not whether the content is legally adequate.
@@ -11,13 +8,12 @@ const { assertPublicUrl } = require("./ssrfGuard");
 // the real page content — including privacy/terms links — is injected by
 // JavaScript after load and simply isn't present in what we fetch. Treating
 // "not found in raw HTML" as "missing" for those apps produces false
-// positives and non-deterministic-looking results (the same app can look
-// like it "has" or "lacks" a privacy policy from one run to the next,
-// depending on nothing meaningful). So: if the page looks like an SPA
-// shell, privacy/terms checks are marked unverifiable instead of failed,
-// and don't penalize the score. Cookie-consent scripts are the exception —
-// those load synchronously via a <script> tag in <head> even on SPAs, so
-// that check stays reliable either way.
+// positives. So: if the page looks like an SPA shell, privacy/terms checks
+// are marked unverifiable instead of failed, and don't penalize the score.
+// Cookie-consent scripts are the exception — those load synchronously via a
+// <script> tag in <head> even on SPAs, so that check stays reliable either way.
+
+const { looksLikeSpaShell } = require("./spaDetect");
 
 const COOKIE_CONSENT_SIGNATURES = [
     /cookieconsent/i,
@@ -29,47 +25,8 @@ const COOKIE_CONSENT_SIGNATURES = [
     /cookiebot/i,
 ];
 
-const SPA_SHELL_SIGNATURES = [
-    /<div\s+id=["']root["']/i,
-    /<div\s+id=["']app["']/i,
-    /<div\s+id=["']__next["']/i,
-];
-
-function looksLikeSpaShell(html) {
-    // Strip scripts/styles/tags to estimate real visible text content.
-    const textOnly = html
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<[^>]+>/g, "")
-        .trim();
-
-    const hasMountPoint = SPA_SHELL_SIGNATURES.some((re) => re.test(html));
-    const veryLittleText = textOnly.length < 300;
-
-    return hasMountPoint && veryLittleText;
-}
-
-async function checkLegalPages(liveUrl) {
-    let safeUrl;
-    try {
-        safeUrl = await assertPublicUrl(liveUrl);
-    } catch {
-        return { findings: [], checked: false };
-    }
-
-    let html;
-    try {
-        const res = await axios.get(safeUrl, {
-            timeout: 8000,
-            maxRedirects: 3,
-            validateStatus: () => true,
-        });
-        html = typeof res.data === "string" ? res.data : "";
-    } catch {
-        return { findings: [], checked: false };
-    }
-
-    if (!html) return { findings: [], checked: false };
+function checkLegalPages(html) {
+    if (!html) return { findings: [] };
 
     const findings = [];
     const isSpaShell = looksLikeSpaShell(html);
@@ -79,9 +36,6 @@ async function checkLegalPages(liveUrl) {
     const hasCookieConsent = COOKIE_CONSENT_SIGNATURES.some((re) => re.test(html));
 
     if (isSpaShell) {
-        // Don't claim these are missing — we genuinely can't see rendered
-        // content. One honest, non-penalizing note instead of two
-        // potentially-wrong findings.
         if (!hasPrivacyLink && !hasTermsLink) {
             findings.push({
                 title: "Could not verify privacy policy / terms of service",
@@ -123,7 +77,7 @@ async function checkLegalPages(liveUrl) {
         });
     }
 
-    return { findings, checked: true, isSpaShell, hasPrivacyLink, hasTermsLink, hasCookieConsent };
+    return { findings, isSpaShell, hasPrivacyLink, hasTermsLink, hasCookieConsent };
 }
 
 module.exports = { checkLegalPages };

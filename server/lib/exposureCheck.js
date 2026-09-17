@@ -53,6 +53,12 @@ async function checkExposedFiles(liveUrl) {
                     category: check.category,
                     description: check.description,
                     fix: check.fix,
+                    file: null,
+                    line: null,
+                    column: null,
+                    evidence: `Exposed path reachable: ${origin}${check.path} (HTTP 200 OK)`,
+                    confidence: "HIGH",
+                    status: "CONFIRMED"
                 });
             }
         } catch {

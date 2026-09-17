@@ -43,12 +43,9 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Fail fast only on config that's truly fatal — nothing works without a DB.
-const required = ['MONGODB_URI'];
-const missing = required.filter((key) => !process.env[key]);
-if (missing.length) {
-    console.error(`Missing required environment variables: ${missing.join(', ')}`);
-    process.exit(1);
+// MONGODB_URI warning: If missing, server runs in fallback mode using in-memory submission store.
+if (!process.env.MONGODB_URI) {
+    console.warn("MONGODB_URI is not set — database persistence will run in-memory fallback mode.");
 }
 
 // GROQ_API_KEY is important but not boot-fatal: if it's missing, every

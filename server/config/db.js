@@ -1,12 +1,21 @@
 const mongoose = require('mongoose');
 
 const ConnectDB = async () => {
-    try{
-        const connection = await mongoose.connect(process.env.MONGODB_URI);
+    if (!process.env.MONGODB_URI) {
+        console.warn("MONGODB_URI not set — database persistence running in fallback mode.");
+        return false;
+    }
+
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000
+        });
         console.log("MongoDB Connected");
-    }catch(err){
-        console.error(`Error : ${err.message}`);
-        process.exit(1);
+        return true;
+    } catch (err) {
+        console.error(`MongoDB Connection Error: ${err.message}`);
+        console.warn("Server starting with database fallback enabled.");
+        return false;
     }
 };
 

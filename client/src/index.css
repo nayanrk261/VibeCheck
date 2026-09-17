@@ -1,1 +1,91 @@
 @import "tailwindcss";
+
+:root {
+	color-scheme: light;
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: #f7f5f1;
+	color: #172033;
+	--app-bg: #f7f5f1;
+	--app-surface: #ffffff;
+	--app-surface-muted: #fbfaf7;
+	--app-border: #e5e2db;
+	--app-text: #172033;
+	--app-text-muted: #5b6475;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	min-width: 320px;
+	background: var(--app-bg);
+	color: var(--app-text);
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body[data-theme='dark'] {
+	color-scheme: dark;
+	--app-bg: #0b1020;
+	--app-surface: #11182c;
+	--app-surface-muted: #141c33;
+	--app-border: #26304a;
+	--app-text: #e6eaf2;
+	--app-text-muted: #a3adc0;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+::selection {
+	background: rgba(16, 185, 129, 0.16);
+	color: #172033;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+body[data-theme='dark'] [class*='bg-white'] {
+	background-color: var(--app-surface) !important;
+}
+
+body[data-theme='dark'] [class*='bg-zinc-50'] {
+	background-color: var(--app-bg) !important;
+}
+
+body[data-theme='dark'] [class*='bg-zinc-100'] {
+	background-color: rgba(15, 23, 42, 0.7) !important;
+}
+
+body[data-theme='dark'] [class*='border-zinc-200'] {
+	border-color: var(--app-border) !important;
+}
+
+body[data-theme='dark'] [class*='border-zinc-300'] {
+	border-color: #334155 !important;
+}
+
+body[data-theme='dark'] [class*='text-zinc-900'],
+body[data-theme='dark'] [class*='text-zinc-800'],
+body[data-theme='dark'] [class*='text-zinc-700'] {
+	color: var(--app-text) !important;
+}
+
+body[data-theme='dark'] [class*='text-zinc-600'],
+body[data-theme='dark'] [class*='text-zinc-500'],
+body[data-theme='dark'] [class*='text-zinc-400'] {
+	color: var(--app-text-muted) !important;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
