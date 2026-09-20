@@ -397,13 +397,12 @@ export default function HomePremium() {
                       GitHub Repository <span className="text-[#35E59A]">*</span>
                     </label>
                     <div className="flex items-center rounded-xl border border-[rgba(255,255,255,0.12)] bg-[#070908] px-4 py-3 text-sm transition-colors focus-within:border-[#35E59A]">
-                      <span className="mr-2 text-xs font-mono text-[#68716D]">https://github.com/</span>
                       <input
                         ref={repoRef}
                         type="text"
                         value={repoUrl}
                         onChange={(e) => setRepoUrl(e.target.value)}
-                        placeholder="user/repository"
+                        placeholder="https://github.com/user/project"
                         disabled={isScanning}
                         className="w-full bg-transparent font-mono text-sm text-[#F5F7F6] outline-none placeholder:text-[#68716D] disabled:opacity-50"
                       />
