@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ShieldCheck,
+  Activity,
+  Layers,
+  CheckSquare,
+  Copy,
+  Check,
+  AlertTriangle,
+  ExternalLink,
+  Zap
+} from 'lucide-react';
 import { getSubmission } from '../api/index';
-import { ActionLink, BrandMark, ThemeToggle } from '../components/ui';
+import { ActionLink, Badge, BrandMark } from '../components/ui';
 import { DEFAULT_CHECKLIST_ITEMS } from '../data/checklist';
 
-const SIDEBAR_SECTIONS = ['Overview', 'Security', 'Production Readiness', 'Findings', 'Manual Checklist'];
+const TABS = [
+  { id: 'Overview', label: 'Overview', icon: Activity },
+  { id: 'Security', label: 'Security', icon: ShieldCheck },
+  { id: 'Readiness', label: 'Readiness', icon: Zap },
+  { id: 'Findings', label: 'Findings', icon: Layers },
+  { id: 'Checklist', label: 'Checklist', icon: CheckSquare },
+];
 
 function formatRepoLabel(repoUrl = '') {
-  return repoUrl.replace(/^https?:\/\/github\.com\//i, '').replace(/\/$/, '') || 'No repo provided';
+  return repoUrl.replace(/^https?:\/\/github\.com\//i, '').replace(/\/$/, '') || 'Repository';
 }
 
 function formatLiveLabel(liveUrl = '') {
@@ -18,22 +36,25 @@ function formatDate(dateValue) {
   if (!dateValue) return 'Unknown time';
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', minute: '2-digit', hour: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
 function scoreLabel(value) {
   if (value == null) return 'NOT ENOUGH DATA';
-  if (value >= 70) return 'GOOD';
+  if (value >= 70) return 'HEALTHY';
   if (value >= 40) return 'NEEDS ATTENTION';
-  return 'HIGH RISK';
+  return 'CRITICAL RISK';
 }
 
-function severityTone(severity) {
-  const value = (severity || '').toUpperCase();
-  if (value === 'HIGH' || value === 'CRITICAL') return 'danger';
-  if (value === 'MEDIUM') return 'attention';
-  if (value === 'LOW') return 'good';
-  return 'neutral';
+function severityBadge(severity) {
+  const value = (severity || 'INFO').toUpperCase();
+  if (value === 'CRITICAL' || value === 'HIGH') {
+    return 'border-[rgba(255,95,86,0.3)] bg-[rgba(255,95,86,0.1)] text-[#FF5F56]';
+  }
+  if (value === 'MEDIUM') {
+    return 'border-[rgba(255,184,77,0.3)] bg-[rgba(255,184,77,0.1)] text-[#FFB84D]';
+  }
+  return 'border-[rgba(139,148,158,0.3)] bg-[rgba(139,148,158,0.1)] text-[#8B949E]';
 }
 
 function sortSeverity(severity) {
@@ -46,7 +67,7 @@ function sortSeverity(severity) {
 }
 
 function findingTarget(finding) {
-  return finding.path || finding.location || finding.url || finding.route || finding.endpoint || finding.target || 'General';
+  return finding.file || finding.path || finding.location || finding.url || finding.route || finding.endpoint || finding.target || 'General';
 }
 
 function statusLabel(status) {
@@ -56,67 +77,13 @@ function statusLabel(status) {
   return 'Not checked';
 }
 
-function SidebarLink({ label, active, onClick }) {
-  return (
-    <button type="button" onClick={onClick} className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors ${active ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950'}`}>
-      <span>{label}</span>
-      <span className="text-zinc-400">→</span>
-    </button>
-  );
-}
-
-function CompactStat({ label, value, tone = 'neutral' }) {
-  const toneClass = tone === 'good' ? 'text-emerald-700' : tone === 'attention' ? 'text-amber-700' : tone === 'danger' ? 'text-rose-700' : 'text-zinc-700';
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3">
-      <div className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">{label}</div>
-      <div className={`mt-2 text-sm font-medium ${toneClass}`}>{value}</div>
-    </div>
-  );
-}
-
-function FindingsTableRow({ finding, active, onClick }) {
-  const severity = (finding.severity || 'INFO').toUpperCase();
-  const toneClass = severityTone(severity) === 'danger' ? 'text-rose-700' : severityTone(severity) === 'attention' ? 'text-amber-700' : severityTone(severity) === 'good' ? 'text-emerald-700' : 'text-zinc-500';
-
-  return (
-    <button type="button" onClick={onClick} className={`grid w-full gap-4 border-b border-zinc-200 px-4 py-4 text-left transition-colors hover:bg-zinc-50 md:grid-cols-[88px_1fr_180px_120px] md:items-start ${active ? 'bg-zinc-50' : 'bg-white'}`}>
-      <div className={`text-[11px] font-medium uppercase tracking-[0.24em] ${toneClass}`}>{severity}</div>
-      <div>
-        <div className="text-sm font-semibold text-zinc-950">{finding.title}</div>
-        <div className="mt-1 text-sm leading-6 text-zinc-600">{finding.description}</div>
-      </div>
-      <div className="font-mono text-sm text-zinc-500">{findingTarget(finding)}</div>
-      <div className="text-right text-[11px] uppercase tracking-[0.24em] text-zinc-500">{finding.reviewed ? 'Reviewed' : 'Confirmed'}</div>
-    </button>
-  );
-}
-
-function InspectorField({ label, value }) {
-  return (
-    <div className="border-b border-zinc-200 py-3 last:border-b-0">
-      <div className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">{label}</div>
-      <div className="mt-1 text-sm leading-6 text-zinc-900">{value}</div>
-    </div>
-  );
-}
-
-function EmptyState({ title, copy }) {
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-      <div className="text-sm font-semibold text-zinc-950">{title}</div>
-      <div className="mt-2 text-sm leading-6 text-zinc-600">{copy}</div>
-    </div>
-  );
-}
-
 export default function ResultPremium() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeSection, setActiveSection] = useState('Overview');
+  const [activeTab, setActiveTab] = useState('Overview');
   const [activeFindingId, setActiveFindingId] = useState('');
   const [reviewedItems, setReviewedItems] = useState(() => new Set());
   const [checklistState, setChecklistState] = useState({});
@@ -140,16 +107,23 @@ export default function ResultPremium() {
   const securityFindings = useMemo(() => findings.filter((item) => item.track !== 'readiness'), [findings]);
   const readinessFindings = useMemo(() => findings.filter((item) => item.track === 'readiness'), [findings]);
   const checklistItems = useMemo(() => (data?.checklist?.length ? data.checklist : DEFAULT_CHECKLIST_ITEMS), [data]);
-  const overall = data?.scores?.overall;
+  
+  const overallScore = data?.scores?.overall;
   const repositoryLabel = formatRepoLabel(data?.repoUrl);
   const liveLabel = formatLiveLabel(data?.liveUrl);
   const scannedLabel = formatDate(data?.createdAt);
-  const activeFinding = findings.find((item) => findingTarget(item) === activeFindingId) || findings[0] || null;
+
   const securityCounts = useMemo(() => ({
+    critical: securityFindings.filter((item) => (item.severity || '').toUpperCase() === 'CRITICAL').length,
     high: securityFindings.filter((item) => (item.severity || '').toUpperCase() === 'HIGH').length,
     medium: securityFindings.filter((item) => (item.severity || '').toUpperCase() === 'MEDIUM').length,
     low: securityFindings.filter((item) => (item.severity || '').toUpperCase() === 'LOW').length,
   }), [securityFindings]);
+
+  const activeFinding = useMemo(() => {
+    if (!findings.length) return null;
+    return findings.find((item) => findingTarget(item) === activeFindingId) || findings[0];
+  }, [findings, activeFindingId]);
 
   useEffect(() => {
     if (!data) return;
@@ -169,22 +143,16 @@ export default function ResultPremium() {
   useEffect(() => {
     if (!findings.length) return;
     if (!activeFindingId || !findings.some((item) => findingTarget(item) === activeFindingId)) {
-      setActiveFindingId(findingTarget([...findings].sort((a, b) => sortSeverity(b.severity) - sortSeverity(a.severity))[0]));
+      const sorted = [...findings].sort((a, b) => sortSeverity(b.severity) - sortSeverity(a.severity));
+      if (sorted[0]) setActiveFindingId(findingTarget(sorted[0]));
     }
   }, [findings, activeFindingId]);
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(''), 1800);
+    const timer = window.setTimeout(() => setToast(''), 2000);
     return () => window.clearTimeout(timer);
   }, [toast]);
-
-  const persistReviewed = (nextSet) => {
-    const values = Array.from(nextSet);
-    localStorage.setItem(`vibecheck-reviewed:${id}`, JSON.stringify(values));
-    setReviewedItems(new Set(values));
-    setToast('Marked as reviewed');
-  };
 
   const handleReviewedToggle = () => {
     if (!activeFinding) return;
@@ -192,7 +160,11 @@ export default function ResultPremium() {
     const next = new Set(reviewedItems);
     if (next.has(target)) next.delete(target);
     else next.add(target);
-    persistReviewed(next);
+    
+    const values = Array.from(next);
+    localStorage.setItem(`vibecheck-reviewed:${id}`, JSON.stringify(values));
+    setReviewedItems(next);
+    setToast(next.has(target) ? 'Marked finding as reviewed' : 'Unmarked finding');
   };
 
   const handleChecklistToggle = (itemId) => {
@@ -216,26 +188,15 @@ export default function ResultPremium() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-50 text-zinc-950">
-        <div className="mx-auto max-w-7xl px-5 py-6 lg:px-8 lg:py-8">
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+      <div className="min-h-screen bg-[#050706] text-[#F5F7F6]">
+        <div className="mx-auto max-w-7xl px-5 py-8">
+          <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] pb-4">
             <BrandMark compact />
-            <ThemeToggle />
+            <div className="h-8 w-24 rounded-xl bg-[#111514] animate-pulse" />
           </div>
-          <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
-            <div className="rounded-[24px] border border-zinc-200 bg-white p-4">
-              <div className="h-4 w-24 rounded-full bg-zinc-100" />
-              <div className="mt-5 space-y-3">
-                <div className="h-10 rounded-2xl bg-zinc-100" />
-                <div className="h-10 rounded-2xl bg-zinc-100" />
-                <div className="h-10 rounded-2xl bg-zinc-100" />
-                <div className="h-10 rounded-2xl bg-zinc-100" />
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="h-28 rounded-[24px] border border-zinc-200 bg-white" />
-              <div className="h-72 rounded-[24px] border border-zinc-200 bg-white" />
-            </div>
+          <div className="mt-8 space-y-6">
+            <div className="h-40 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] animate-pulse" />
+            <div className="h-80 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] animate-pulse" />
           </div>
         </div>
       </div>
@@ -244,16 +205,13 @@ export default function ResultPremium() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-zinc-50 text-zinc-950">
-        <div className="mx-auto flex min-h-screen max-w-2xl items-center px-5">
-          <div className="rounded-[24px] border border-zinc-200 bg-white p-8 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
-            <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Report unavailable</div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950">{error}</h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">The report could not be loaded. Check the link and try again.</p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <ActionLink href="/" variant="primary">Back to audit</ActionLink>
-              <ActionLink href="/contact" variant="ghost">Contact support</ActionLink>
-            </div>
+      <div className="min-h-screen bg-[#050706] text-[#F5F7F6] flex items-center justify-center p-5">
+        <div className="max-w-md rounded-2xl border border-[rgba(255,95,86,0.3)] bg-[#0D1110] p-8 text-center shadow-2xl">
+          <AlertTriangle className="w-10 h-10 text-[#FF5F56] mx-auto" />
+          <h1 className="mt-4 text-xl font-bold text-[#F5F7F6]">{error}</h1>
+          <p className="mt-2 text-xs text-[#A3AAA7]">The report could not be loaded. Please verify the link or try again.</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <ActionLink href="/" variant="primary">New Audit</ActionLink>
           </div>
         </div>
       </div>
@@ -261,288 +219,415 @@ export default function ResultPremium() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950 lg:grid lg:grid-cols-[272px_1fr]">
-      <aside className="border-b border-zinc-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex h-full flex-col px-4 py-4">
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
-            <BrandMark compact />
-            <ThemeToggle />
+    <div className="min-h-screen bg-[#050706] text-[#F5F7F6]">
+      {/* TOP HEADER */}
+      <header className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.08)] bg-[#050706]/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[rgba(255,255,255,0.12)] bg-[#111514] px-3 py-1.5 text-xs font-medium text-[#F5F7F6] hover:bg-[#151918]"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              New Audit
+            </button>
+            <BrandMark />
           </div>
 
-          <button type="button" onClick={() => navigate('/')} className="mt-4 rounded-xl bg-emerald-600 px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-emerald-500">
-            + New Audit
-          </button>
+          <div className="hidden md:flex items-center gap-2 text-xs font-mono text-[#A3AAA7]">
+            <span className="text-[#F5F7F6] font-semibold">{repositoryLabel}</span>
+            <span className="text-[#68716D]">/</span>
+            <span>{liveLabel}</span>
+            <span className="text-[#68716D]">/</span>
+            <span>Audited {scannedLabel}</span>
+          </div>
 
-          <nav className="mt-4 flex-1 space-y-1">
-            {SIDEBAR_SECTIONS.map((section) => (
-              <SidebarLink key={section} label={section} active={activeSection === section} onClick={() => setActiveSection(section)} />
-            ))}
-
-            <div className="my-4 border-t border-zinc-200" />
-
-            <SidebarLink label="Past Scans" active={false} onClick={() => copyValue(window.location.href, 'Report link copied')} />
-            <SidebarLink label="Settings" active={false} onClick={() => navigate('/contact')} />
-          </nav>
-
-          <div className="space-y-2 border-t border-zinc-200 pt-4">
-            <div className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">Help</div>
-            <div className="text-sm text-zinc-600">Security auditing for modern applications.</div>
-            <div className="pt-2 text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">Account</div>
-            <div className="text-sm text-zinc-600">Signed in locally</div>
+          <div className="flex items-center gap-3">
+            <ActionLink href="/" variant="primary" className="text-xs py-1.5 px-3">
+              Re-scan
+            </ActionLink>
           </div>
         </div>
-      </aside>
+      </header>
 
-      <main className="min-w-0">
-        <div className="border-b border-zinc-200 bg-white/90 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
-            <div className="flex items-center gap-5">
-              <BrandMark compact />
-              <div className="hidden items-center gap-3 text-sm text-zinc-500 md:flex">
-                <span className="font-medium text-zinc-900">{repositoryLabel}</span>
-                <span className="text-zinc-300">/</span>
-                <span>{liveLabel}</span>
-                <span className="text-zinc-300">/</span>
-                <span>Scanned {scannedLabel}</span>
+      {/* MAIN CONTAINER */}
+      <main className="mx-auto max-w-7xl px-5 py-8 lg:px-8 space-y-8">
+        {/* HEADER PANEL */}
+        <div className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6 lg:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-3">
+                <Badge variant="green">VibeCheck Security Audit</Badge>
+                {data?.auditMode === 'production' && <Badge variant="default">Production Mode</Badge>}
+              </div>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[#F5F7F6] font-mono">
+                {repositoryLabel}
+              </h1>
+              {data?.liveUrl && (
+                <a
+                  href={data.liveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-mono text-[#35E59A] hover:underline"
+                >
+                  {data.liveUrl} <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-mono">
+                {securityCounts.critical > 0 && (
+                  <span className="rounded-md border border-[rgba(255,95,86,0.3)] bg-[rgba(255,95,86,0.1)] px-2 py-0.5 text-[#FF5F56]">
+                    Critical: {securityCounts.critical}
+                  </span>
+                )}
+                {securityCounts.high > 0 && (
+                  <span className="rounded-md border border-[rgba(255,95,86,0.25)] bg-[rgba(255,95,86,0.08)] px-2 py-0.5 text-[#FF5F56]">
+                    High: {securityCounts.high}
+                  </span>
+                )}
+                {securityCounts.medium > 0 && (
+                  <span className="rounded-md border border-[rgba(255,184,77,0.3)] bg-[rgba(255,184,77,0.1)] px-2 py-0.5 text-[#FFB84D]">
+                    Medium: {securityCounts.medium}
+                  </span>
+                )}
+                {securityCounts.low > 0 && (
+                  <span className="rounded-md border border-[rgba(139,148,158,0.3)] bg-[rgba(139,148,158,0.1)] px-2 py-0.5 text-[#8B949E]">
+                    Low: {securityCounts.low}
+                  </span>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <ActionLink href="/" variant="primary">Re-scan</ActionLink>
+
+            {/* Score Highlight Box */}
+            <div className="flex items-center gap-6 rounded-xl border border-[rgba(53,229,154,0.25)] bg-[rgba(53,229,154,0.05)] p-5">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#A3AAA7]">Security Score</div>
+                <div className="mt-1 text-5xl font-extrabold font-mono text-[#35E59A]">
+                  {overallScore == null ? '—' : overallScore}
+                </div>
+              </div>
+              <div className="border-l border-[rgba(255,255,255,0.08)] pl-6 text-xs space-y-1">
+                <div className="font-bold text-[#35E59A]">{scoreLabel(overallScore)}</div>
+                <div className="text-[#A3AAA7]">{findings.length} findings total</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mx-auto max-w-7xl px-5 py-6 lg:px-8 lg:py-8">
-          {activeSection === 'Overview' && (
-            <section className="grid gap-6 xl:grid-cols-[1fr_0.68fr]">
-              <div className="rounded-[24px] border border-zinc-200 bg-white p-6 shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Results overview</div>
-                    <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 md:text-4xl">{repositoryLabel}</h1>
-                    <div className="mt-2 text-sm text-zinc-500">{liveLabel}</div>
-                    <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Scanned {scannedLabel}</div>
+        {/* NAVIGATION TABS */}
+        <div className="flex border-b border-[rgba(255,255,255,0.08)] gap-2 overflow-x-auto">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  active
+                    ? 'border-[#35E59A] text-[#35E59A] bg-[rgba(53,229,154,0.04)]'
+                    : 'border-transparent text-[#A3AAA7] hover:text-[#F5F7F6] hover:bg-[rgba(255,255,255,0.03)]'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {tab.id === 'Findings' && (
+                  <span className="rounded-full bg-[#151918] px-2 py-0.5 text-xs font-mono text-[#F5F7F6]">
+                    {findings.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'Overview' && (
+          <div className="grid gap-6 lg:grid-cols-12">
+            {/* Executive Summary & Scores (8 cols) */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Executive Summary Card */}
+              <div className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6">
+                <h2 className="text-base font-bold text-[#F5F7F6] flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[#35E59A]" />
+                  Executive Summary
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-[#A3AAA7]">
+                  {data?.summary || data?.executiveSummary || 'VibeCheck performed deterministic analysis on the repository files and dependencies. Review line-level evidence in the Findings tab.'}
+                </p>
+              </div>
+
+              {/* Sub-scores Grid */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                {[
+                  ['Security', data?.scores?.security?.value, data?.scores?.security?.status],
+                  ['Readiness', data?.scores?.readiness?.value, data?.scores?.readiness?.status],
+                  ['Legal', data?.scores?.legal?.value, data?.scores?.legal?.status],
+                  ['Integrations', data?.scores?.integrations?.value, data?.scores?.integrations?.status],
+                  ['SEO', data?.scores?.seo?.value, data?.scores?.seo?.status],
+                ].map(([label, val, st]) => (
+                  <div key={label} className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#A3AAA7]">{label}</span>
+                      <span className="text-sm font-bold font-mono text-[#F5F7F6]">
+                        {val == null ? 'Not enough data' : `${val}/100`}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-[10px] font-mono text-[#68716D] uppercase">
+                      {statusLabel(st)}
+                    </div>
                   </div>
-                  <ActionLink href="/" variant="primary">Re-scan</ActionLink>
+                ))}
+              </div>
+            </div>
+
+            {/* Metadata & Quick Stats Sidebar (4 cols) */}
+            <div className="lg:col-span-4 space-y-6">
+              <div className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6 space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#68716D]">Repository Metadata</h3>
+                <div className="space-y-3 text-xs font-mono">
+                  <div className="flex justify-between border-b border-[rgba(255,255,255,0.06)] pb-2">
+                    <span className="text-[#A3AAA7]">Tech Stack</span>
+                    <span className="text-[#F5F7F6]">{data?.meta?.techStack?.join(', ') || 'Node.js, React'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-[rgba(255,255,255,0.06)] pb-2">
+                    <span className="text-[#A3AAA7]">Files Scanned</span>
+                    <span className="text-[#F5F7F6]">{data?.meta?.filesScanned || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-[rgba(255,255,255,0.06)] pb-2">
+                    <span className="text-[#A3AAA7]">Secrets Found</span>
+                    <span className="text-[#FF5F56] font-bold">{data?.meta?.secretsFound ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-[rgba(255,255,255,0.06)] pb-2">
+                    <span className="text-[#A3AAA7]">Response Time</span>
+                    <span className="text-[#F5F7F6]">{data?.meta?.responseTime ? `${data.meta.responseTime}ms` : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#A3AAA7]">HTTPS Live</span>
+                    <span className={data?.meta?.isHttps ? 'text-[#35E59A]' : 'text-[#A3AAA7]'}>
+                      {data?.meta?.isHttps ? 'Yes' : 'No'}
+                    </span>
+                  </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Overall readiness</div>
-                    <div className="mt-3 flex items-end gap-4">
-                      <div className="text-7xl font-semibold tracking-tight text-zinc-950">{overall == null ? '—' : overall}</div>
-                      <div className="pb-2 text-sm font-medium text-emerald-700">{scoreLabel(overall)}</div>
-                    </div>
-                    <div className="mt-4 h-2 rounded-full bg-zinc-100">
-                      <div className="h-full rounded-full bg-emerald-600" style={overall == null ? { width: '24%' } : { width: `${overall}%` }} />
-                    </div>
-                    <p className="mt-4 max-w-md text-sm leading-6 text-zinc-600">
-                      Security and production readiness are measured separately, so the score stays credible and explainable.
-                    </p>
-                  </div>
+        {/* TAB 2 & 4: SECURITY & FINDINGS */}
+        {(activeTab === 'Security' || activeTab === 'Findings') && (
+          <div className="grid gap-6 lg:grid-cols-12">
+            {/* Findings Table (7 cols) */}
+            <div className="lg:col-span-7 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] overflow-hidden">
+              <div className="border-b border-[rgba(255,255,255,0.08)] p-4 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#A3AAA7]">Detected Findings</span>
+                <span className="text-xs font-mono text-[#68716D]">{findings.length} Total</span>
+              </div>
 
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-                    {[
-                      ['Security', data?.scores?.security?.value, data?.scores?.security?.status],
-                      ['Readiness', data?.scores?.readiness?.value, data?.scores?.readiness?.status],
-                      ['Legal', data?.scores?.legal?.value, data?.scores?.legal?.status],
-                      ['Integrations', data?.scores?.integrations?.value, data?.scores?.integrations?.status],
-                      ['SEO', data?.scores?.seo?.value, data?.scores?.seo?.status],
-                    ].map(([label, value, status]) => (
-                      <div key={label} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium text-zinc-900">{label}</div>
-                          <div className="text-sm font-medium text-zinc-950">{value == null ? 'Not enough data' : value}</div>
+              {findings.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#A3AAA7]">
+                  No findings detected for this repository.
+                </div>
+              ) : (
+                <div className="divide-y divide-[rgba(255,255,255,0.06)]">
+                  {findings
+                    .slice()
+                    .sort((a, b) => sortSeverity(b.severity) - sortSeverity(a.severity))
+                    .map((item) => {
+                      const target = findingTarget(item);
+                      const isSelected = target === activeFindingId;
+                      const isReviewed = reviewedItems.has(target);
+                      return (
+                        <div
+                          key={`${item.title}-${target}`}
+                          onClick={() => setActiveFindingId(target)}
+                          className={`p-4 transition-colors cursor-pointer ${
+                            isSelected ? 'bg-[#151918]' : 'hover:bg-[#111514]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold font-mono ${severityBadge(item.severity)}`}>
+                                {(item.severity || 'INFO').toUpperCase()}
+                              </span>
+                              <h3 className="text-sm font-bold text-[#F5F7F6]">{item.title}</h3>
+                            </div>
+                            {isReviewed && (
+                              <span className="text-[10px] font-mono text-[#35E59A] flex items-center gap-1">
+                                <Check className="w-3 h-3" /> Reviewed
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1.5 text-xs text-[#A3AAA7] line-clamp-2">{item.description}</p>
+                          <div className="mt-2 text-[11px] font-mono text-[#68716D]">
+                            Location: {target} {item.line ? `(Line ${item.line})` : ''}
+                          </div>
                         </div>
-                        <div className="mt-1 text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">{statusLabel(status)}</div>
-                      </div>
-                    ))}
-                  </div>
+                      );
+                    })}
                 </div>
-              </div>
+              )}
+            </div>
 
-              <div className="rounded-[24px] border border-zinc-200 bg-white p-6 shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-                <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Totals</div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <CompactStat label="Findings" value={findings.length} />
-                  <CompactStat label="High" value={securityCounts.high} tone="danger" />
-                  <CompactStat label="Medium" value={securityCounts.medium} tone="attention" />
-                </div>
-                <div className="mt-5 rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Trust model</div>
-                  <div className="mt-3 space-y-3 text-sm leading-6 text-zinc-600">
-                    <p>Scores are derived from detected evidence and predefined rules.</p>
-                    <p>When evidence is insufficient, VibeCheck shows Not enough data instead of guessing.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {activeSection === 'Security' && (
-            <section className="grid gap-6 xl:grid-cols-[1fr_420px]">
-              <div className="rounded-[24px] border border-zinc-200 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-                <div className="border-b border-zinc-200 px-5 py-5">
-                  <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Security</div>
-                  <div className="mt-2 text-4xl font-semibold tracking-tight text-zinc-950">{data?.scores?.security?.value == null ? 'Not enough data' : `${data.scores.security.value} / 100`}</div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-zinc-600">
-                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">{securityCounts.high} High</span>
-                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">{securityCounts.medium} Medium</span>
-                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">{securityCounts.low} Low</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[88px_1fr_180px_120px] gap-4 border-b border-zinc-200 px-5 py-3 text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">
-                  <div>Severity</div>
-                  <div>Finding</div>
-                  <div>Affected surface</div>
-                  <div className="text-right">Status</div>
-                </div>
-
-                <div>
-                  {securityFindings.length > 0 ? (
-                    [...securityFindings]
-                      .sort((left, right) => sortSeverity(right.severity) - sortSeverity(left.severity))
-                      .map((finding) => (
-                        <FindingsTableRow
-                          key={`${finding.title}-${findingTarget(finding)}`}
-                          finding={finding}
-                          active={findingTarget(finding) === activeFindingId}
-                          onClick={() => setActiveFindingId(findingTarget(finding))}
-                        />
-                      ))
-                  ) : (
-                    <div className="p-5">
-                      <EmptyState title="NOT ENOUGH DATA" copy="VibeCheck could not gather enough evidence to score this category reliably." />
-                    </div>
+            {/* Evidence Inspector Side Panel (5 cols) */}
+            <div className="lg:col-span-5">
+              <div className="sticky top-20 rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6 space-y-4">
+                <div className="border-b border-[rgba(255,255,255,0.08)] pb-4 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#35E59A]">Evidence Inspector</span>
+                  {activeFinding && (
+                    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold font-mono ${severityBadge(activeFinding.severity)}`}>
+                      {(activeFinding.severity || 'INFO').toUpperCase()}
+                    </span>
                   )}
                 </div>
-              </div>
 
-              <aside className="rounded-[24px] border border-zinc-200 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.05)] xl:sticky xl:top-4 xl:h-fit">
                 {activeFinding ? (
-                  <div className="p-5">
-                    <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Finding detail</div>
-                    <h2 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{activeFinding.title}</h2>
-                    <div className={`mt-3 text-[10px] font-medium uppercase tracking-[0.24em] ${severityTone(activeFinding.severity) === 'danger' ? 'text-rose-700' : severityTone(activeFinding.severity) === 'attention' ? 'text-amber-700' : 'text-zinc-500'}`}>
-                      {(activeFinding.severity || 'INFO').toUpperCase()}
-                    </div>
-                    <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Description</div>
-                      <p className="mt-2 text-sm leading-6 text-zinc-600">{activeFinding.description || 'This issue was detected from the current audit evidence and may expose users or private configuration.'}</p>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <InspectorField label="Evidence" value={activeFinding.evidenceUrl || activeFinding.url || activeFinding.path || findingTarget(activeFinding)} />
-                      <InspectorField label="Affected surface" value={findingTarget(activeFinding)} />
-                      <InspectorField label="Status" value={reviewedItems.has(findingTarget(activeFinding)) ? 'Reviewed' : 'Confirmed'} />
-                    </div>
-                    <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Recommendation</div>
-                      <p className="mt-2 text-sm leading-6 text-zinc-600">{activeFinding.fix || 'Remove the issue from the public deployment and rotate any exposed credentials.'}</p>
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-3">
-                      <button type="button" onClick={handleReviewedToggle} className="rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500">
-                        Mark as reviewed
-                      </button>
-                      <button type="button" onClick={() => copyValue(window.location.href, 'Finding link copied')} className="rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-950">
-                        Copy link
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-5">
-                    <EmptyState title="NOT ENOUGH DATA" copy="VibeCheck could not gather enough evidence to score this category reliably." />
-                  </div>
-                )}
-              </aside>
-            </section>
-          )}
-
-          {activeSection === 'Production Readiness' && (
-            <section className="space-y-6">
-              <div className="rounded-[24px] border border-zinc-200 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-                <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Production readiness</div>
-                <div className="mt-2 text-4xl font-semibold tracking-tight text-zinc-950">{data?.scores?.readiness?.value == null ? 'Not enough data' : `${data.scores.readiness.value} / 100`}</div>
-                <p className="mt-3 text-sm leading-6 text-zinc-600">Production readiness does not affect the security score. It is measured and reported separately.</p>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-3">
-                {[
-                  ['Legal', data?.scores?.legal?.value, readinessFindings.filter((item) => item.category === 'Legal')],
-                  ['Integrations', data?.scores?.integrations?.value, readinessFindings.filter((item) => item.category === 'Integrations')],
-                  ['SEO', data?.scores?.seo?.value, readinessFindings.filter((item) => item.category === 'SEO')],
-                ].map(([label, value, items]) => (
-                  <div key={label} className="rounded-[24px] border border-zinc-200 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-                    <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">{label}</div>
-                    <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950">{value == null ? 'Not enough data' : value}</div>
-                    <div className="mt-4 space-y-3">
-                      {items.length > 0 ? items.map((item) => (
-                        <div key={`${item.title}-${findingTarget(item)}`} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3">
-                          <div className="text-sm font-medium text-zinc-900">{item.title}</div>
-                          <div className="mt-1 text-sm text-zinc-600">{item.description}</div>
-                        </div>
-                      )) : <EmptyState title="NOT ENOUGH DATA" copy="VibeCheck could not gather enough evidence to score this category reliably." />}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {activeSection === 'Findings' && (
-            <section className="rounded-[24px] border border-zinc-200 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-              <div className="border-b border-zinc-200 px-5 py-5">
-                <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Findings</div>
-                <div className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Premium finding rows</div>
-              </div>
-              <div>
-                {findings.length > 0 ? (
-                  [...findings]
-                    .sort((left, right) => sortSeverity(right.severity) - sortSeverity(left.severity))
-                    .map((finding) => (
-                      <FindingsTableRow
-                        key={`${finding.title}-${findingTarget(finding)}`}
-                        finding={finding}
-                        active={findingTarget(finding) === activeFindingId}
-                        onClick={() => setActiveFindingId(findingTarget(finding))}
-                      />
-                    ))
-                ) : (
-                  <div className="p-5">
-                    <EmptyState title="NOT ENOUGH DATA" copy="VibeCheck could not gather enough evidence to score this category reliably." />
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {activeSection === 'Manual Checklist' && (
-            <section className="rounded-[24px] border border-zinc-200 bg-white shadow-[0_16px_32px_rgba(15,23,42,0.05)]">
-              <div className="border-b border-zinc-200 px-5 py-5">
-                <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Manual checklist</div>
-                <div className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Not checked, passed, and needs attention stay explicit.</div>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Some application behavior cannot be reliably verified automatically.</p>
-              </div>
-              <div className="divide-y divide-zinc-200">
-                {checklistItems.map((item) => (
-                  <button key={item.id} type="button" onClick={() => handleChecklistToggle(item.id)} className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-zinc-50">
+                  <div className="space-y-4 text-xs font-mono">
                     <div>
-                      <div className="text-sm font-medium text-zinc-950">{item.label}</div>
-                      <div className="mt-1 text-sm text-zinc-600">{item.description}</div>
+                      <div className="text-[#A3AAA7] font-sans font-semibold text-sm text-[#F5F7F6]">{activeFinding.title}</div>
+                      <div className="mt-1 text-[#68716D] font-sans">{activeFinding.description}</div>
                     </div>
-                    <div className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500">
-                      {statusLabel(checklistState[item.id])}
+
+                    <div className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#070908] p-3 space-y-1.5">
+                      <div><span className="text-[#68716D]">File:</span> <span className="text-[#35E59A]">{findingTarget(activeFinding)}</span></div>
+                      {activeFinding.line && <div><span className="text-[#68716D]">Line:</span> <span className="text-[#F5F7F6]">{activeFinding.line}</span></div>}
+                      {activeFinding.column && <div><span className="text-[#68716D]">Column:</span> <span className="text-[#F5F7F6]">{activeFinding.column}</span></div>}
+                      <div><span className="text-[#68716D]">Confidence:</span> <span className="text-[#FFB84D]">{activeFinding.confidence || 'HIGH'}</span></div>
+                    </div>
+
+                    {(activeFinding.snippet || activeFinding.code || activeFinding.evidence) && (
+                      <div>
+                        <div className="text-[#68716D] mb-1 font-sans font-semibold">Evidence Snippet:</div>
+                        <div className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#050706] p-3 overflow-x-auto text-[#FFB84D]">
+                          <pre>{activeFinding.snippet || activeFinding.code || activeFinding.evidence}</pre>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeFinding.fix && (
+                      <div className="rounded-xl border border-[rgba(53,229,154,0.2)] bg-[rgba(53,229,154,0.04)] p-3 font-sans">
+                        <div className="font-semibold text-[#35E59A]">Recommended Action:</div>
+                        <div className="mt-1 text-[#A3AAA7] text-xs">{activeFinding.fix}</div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleReviewedToggle}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#35E59A] py-2.5 text-xs font-bold text-[#050706] transition-all hover:bg-[#20C987] cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        {reviewedItems.has(findingTarget(activeFinding)) ? 'Reviewed ✓' : 'Mark Reviewed'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyValue(window.location.href, 'Report link copied')}
+                        className="p-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] bg-[#111514] text-[#F5F7F6] hover:bg-[#151918]"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-[#68716D]">
+                    Select a finding to inspect evidence details.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: READINESS */}
+        {activeTab === 'Readiness' && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6">
+              <h2 className="text-base font-bold text-[#F5F7F6]">Production Readiness Signals</h2>
+              <p className="mt-1 text-xs text-[#A3AAA7]">
+                Production readiness does not alter security scores. Signals include SEO headers, legal disclosures, and third-party API availability.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-6">
+              {['Legal', 'Integrations', 'SEO'].map((cat) => {
+                const catFindings = readinessFindings.filter((item) => item.category === cat);
+                return (
+                  <div key={cat} className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6 space-y-4">
+                    <h3 className="text-sm font-bold text-[#F5F7F6]">{cat} Readiness</h3>
+                    {catFindings.length === 0 ? (
+                      <p className="text-xs text-[#68716D]">No readiness issues detected for {cat}.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {catFindings.map((item) => (
+                          <div key={item.title} className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#111514] p-3 text-xs">
+                            <div className="font-semibold text-[#F5F7F6]">{item.title}</div>
+                            <div className="mt-1 text-[#A3AAA7]">{item.description}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: CHECKLIST */}
+        {activeTab === 'Checklist' && (
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0D1110] p-6 sm:p-8 space-y-6">
+            <div>
+              <h2 className="text-base font-bold text-[#F5F7F6]">Manual Verification Checklist</h2>
+              <p className="mt-1 text-xs text-[#A3AAA7]">
+                Track manual testing steps that cannot be proven by automated source code parsing alone.
+              </p>
+            </div>
+
+            <div className="divide-y divide-[rgba(255,255,255,0.06)]">
+              {checklistItems.map((item) => {
+                const currentStatus = checklistState[item.id] || 'not-checked';
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleChecklistToggle(item.id)}
+                    className="flex w-full items-center justify-between py-4 text-left transition-colors hover:bg-[rgba(255,255,255,0.02)] cursor-pointer"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-[#F5F7F6]">{item.label}</div>
+                      <div className="mt-0.5 text-xs text-[#A3AAA7]">{item.description}</div>
+                    </div>
+                    <div className="ml-4">
+                      {currentStatus === 'passed' ? (
+                        <span className="rounded-full border border-[rgba(53,229,154,0.3)] bg-[rgba(53,229,154,0.1)] px-3 py-1 text-xs font-bold text-[#35E59A]">
+                          Passed ✓
+                        </span>
+                      ) : currentStatus === 'needs-attention' ? (
+                        <span className="rounded-full border border-[rgba(255,184,77,0.3)] bg-[rgba(255,184,77,0.1)] px-3 py-1 text-xs font-bold text-[#FFB84D]">
+                          Needs attention
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-[rgba(255,255,255,0.08)] bg-[#111514] px-3 py-1 text-xs font-medium text-[#68716D]">
+                          Not checked
+                        </span>
+                      )}
                     </div>
                   </button>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-
-        {toast && <div className="fixed bottom-6 right-6 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">{toast}</div>}
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 rounded-xl border border-[rgba(53,229,154,0.3)] bg-[#0D1110] px-4 py-3 text-xs font-semibold text-[#35E59A] shadow-2xl animate-fade-in z-50">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

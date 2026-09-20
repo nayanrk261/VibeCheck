@@ -178,7 +178,7 @@ async function runApiTests() {
             ];
             github.fetchFileContent = async (owner, repo, path) => {
                 if (path === 'package.json') return JSON.stringify({ name: 'sample-repo', dependencies: { express: '^4.18.2' } });
-                if (path === 'src/config.js') return 'const apiKey = "sk_test_placeholder_key_removed";';
+                if (path === 'src/config.js') return 'const apiKey = "TEST_MOCK_SECRET_VALUE_1234567890";';
                 if (path === 'src/index.js') return 'const express = require("express"); const app = express();';
                 return '';
             };

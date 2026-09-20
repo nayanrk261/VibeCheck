@@ -1,91 +1,126 @@
 @import "tailwindcss";
 
 :root {
-	color-scheme: light;
-	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	background: #f7f5f1;
-	color: #172033;
-	--app-bg: #f7f5f1;
-	--app-surface: #ffffff;
-	--app-surface-muted: #fbfaf7;
-	--app-border: #e5e2db;
-	--app-text: #172033;
-	--app-text-muted: #5b6475;
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  /* Launch UI Dark Palette */
+  --bg-main: #050706;
+  --bg-subtle: #070908;
+  --bg-elevated: #0A0D0C;
+  
+  /* Surfaces */
+  --surface-1: #0D1110;
+  --surface-2: #111514;
+  --surface-3: #151918;
+  
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-green: rgba(53, 229, 154, 0.25);
+  
+  /* Text */
+  --text-primary: #F5F7F6;
+  --text-secondary: #A3AAA7;
+  --text-muted: #68716D;
+  
+  /* Green Accent System */
+  --green-primary: #35E59A;
+  --green-secondary: #20C987;
+  --green-dark: #0B3D2B;
+  --green-glow: rgba(53, 229, 154, 0.12);
+  --green-glow-strong: rgba(53, 229, 154, 0.22);
+  
+  /* Severity Badges */
+  --critical: #FF5F56;
+  --warning: #FFB84D;
+  --info: #8B949E;
 }
 
 html {
-	scroll-behavior: smooth;
+  scroll-behavior: smooth;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
 }
 
 body {
-	margin: 0;
-	min-width: 320px;
-	background: var(--app-bg);
-	color: var(--app-text);
-	text-rendering: optimizeLegibility;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-}
-
-body[data-theme='dark'] {
-	color-scheme: dark;
-	--app-bg: #0b1020;
-	--app-surface: #11182c;
-	--app-surface-muted: #141c33;
-	--app-border: #26304a;
-	--app-text: #e6eaf2;
-	--app-text-muted: #a3adc0;
+  margin: 0;
+  min-width: 320px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
-	box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 ::selection {
-	background: rgba(16, 185, 129, 0.16);
-	color: #172033;
+  background: rgba(53, 229, 154, 0.22);
+  color: #FFFFFF;
 }
 
 a {
-	color: inherit;
-	text-decoration: none;
-}
-
-body[data-theme='dark'] [class*='bg-white'] {
-	background-color: var(--app-surface) !important;
-}
-
-body[data-theme='dark'] [class*='bg-zinc-50'] {
-	background-color: var(--app-bg) !important;
-}
-
-body[data-theme='dark'] [class*='bg-zinc-100'] {
-	background-color: rgba(15, 23, 42, 0.7) !important;
-}
-
-body[data-theme='dark'] [class*='border-zinc-200'] {
-	border-color: var(--app-border) !important;
-}
-
-body[data-theme='dark'] [class*='border-zinc-300'] {
-	border-color: #334155 !important;
-}
-
-body[data-theme='dark'] [class*='text-zinc-900'],
-body[data-theme='dark'] [class*='text-zinc-800'],
-body[data-theme='dark'] [class*='text-zinc-700'] {
-	color: var(--app-text) !important;
-}
-
-body[data-theme='dark'] [class*='text-zinc-600'],
-body[data-theme='dark'] [class*='text-zinc-500'],
-body[data-theme='dark'] [class*='text-zinc-400'] {
-	color: var(--app-text-muted) !important;
+  color: inherit;
+  text-decoration: none;
 }
 
 button,
 input,
 textarea,
 select {
-	font: inherit;
+  font: inherit;
 }
+
+/* Background Pattern & Ambient Glow Utilities */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+.bg-ambient-glow {
+  background: radial-gradient(circle at 50% 15%, rgba(53, 229, 154, 0.08) 0%, rgba(5, 7, 6, 0) 65%);
+}
+
+.glass-panel {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(16px);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  background-color: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+.glow-box-green {
+  box-shadow: 0 0 40px -10px rgba(53, 229, 154, 0.15);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050706;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #151918;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #202624;
+}
+
