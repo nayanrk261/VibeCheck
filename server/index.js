@@ -43,19 +43,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// MONGODB_URI warning: If missing, server runs in fallback mode using in-memory submission store.
-if (!process.env.MONGODB_URI) {
-    console.warn("MONGODB_URI is not set — database persistence will run in-memory fallback mode.");
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log("Server running on port " + PORT);
+    });
 }
 
-// GROQ_API_KEY is important but not boot-fatal: if it's missing, every
-// audit's AI summary call will fail and fall back to a templated summary
-// (see auditController.js / scoring.js buildFallbackSummary) instead of
-// the whole audit failing. Warn loudly so it doesn't go unnoticed.
-if (!process.env.GROQ_API_KEY) {
-    console.warn("GROQ_API_KEY is not set — audits will still run, but summaries will use a generic fallback instead of an AI-written one.");
-}
-
-app.listen(PORT, () => {
-    console.log("Server running on port " + PORT);
-});
+module.exports = app;

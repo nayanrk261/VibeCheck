@@ -4,12 +4,14 @@ const parseGithubUrl = (url) => {
     if (!url || typeof url !== 'string') {
         throw new Error("Invalid Github url");
     }
-    const cleaned = url.trim().replace(/\.git$/i, '').replace(/\/$/, '');
-    const parts = cleaned.split("/");
-    const repo = parts.pop();
-    const owner = parts.pop();
-
-    if (!owner || !repo || owner.includes(':') || repo.includes(':')) {
+    const cleaned = url.trim().replace(/\.git$/i, '');
+    const match = cleaned.match(/(?:github\.com\/)?([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/);
+    if (!match) {
+        throw new Error("Invalid Github url");
+    }
+    const owner = match[1];
+    const repo = match[2];
+    if (!owner || !repo || owner === 'http:' || owner === 'https:' || owner === 'github.com') {
         throw new Error("Invalid Github url");
     }
     return { owner, repo };
@@ -80,16 +82,28 @@ const isRelevantFile = (filepath) => {
 
 const fetchRepoTree = async (owner, repo) => {
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`;
+    try {
+        const response = await axios.get(url, { headers: getGithubHeaders(), timeout: 15000 });
+        const tree = response.data.tree || [];
 
-    const response = await axios.get(url, { headers: getGithubHeaders() });
-    const tree = response.data.tree || [];
+        const discoveredBlobs = tree.filter(item => item.type === "blob");
+        const discoveredCount = discoveredBlobs.length;
 
-    const discoveredBlobs = tree.filter(item => item.type === "blob");
-    const discoveredCount = discoveredBlobs.length;
-
-    const files = discoveredBlobs.filter((item) => isRelevantFile(item.path));
-    files.discoveredCount = discoveredCount;
-    return files;
+        const files = discoveredBlobs.filter((item) => isRelevantFile(item.path));
+        files.discoveredCount = discoveredCount;
+        return files;
+    } catch (err) {
+        if (err.response?.status === 404) {
+            throw new Error(`GitHub repository "${owner}/${repo}" was not found or is private. Please ensure the repository is public and the URL is correct.`);
+        }
+        if (err.response?.status === 403) {
+            throw new Error("GitHub API rate limit exceeded. Please try again in a few minutes.");
+        }
+        if (err.response?.status === 401) {
+            throw new Error("GitHub API request failed due to invalid credentials.");
+        }
+        throw new Error(err.response?.data?.message || err.message || "Failed to fetch repository tree from GitHub");
+    }
 };
 
 const fetchFileContent = async (owner, repo, filepath) => {
@@ -99,8 +113,13 @@ const fetchFileContent = async (owner, repo, filepath) => {
         headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
     }
 
-    const response = await axios.get(url, { headers });
-    return response.data;
+    try {
+        const response = await axios.get(url, { headers, timeout: 10000 });
+        return response.data;
+    } catch (err) {
+        console.warn(`Failed to fetch file content for ${filepath}:`, err.message);
+        return null;
+    }
 };
 
 const detectTechStack = (files) => {

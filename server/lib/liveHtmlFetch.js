@@ -16,7 +16,7 @@ async function fetchLiveHtml(rawUrl) {
             headers: {
                 "User-Agent": "VibeCheck-Auditor/1.0 (+https://vibecheck.app)"
             },
-            validateStatus: (status) => status < 400
+            validateStatus: (status) => status < 500
         });
 
         if (typeof response.data === "string") {

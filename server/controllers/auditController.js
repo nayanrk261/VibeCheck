@@ -191,7 +191,17 @@ const runAudit = async (req, res) => {
             return res.status(400).json({ error: "That doesn't look like a valid GitHub repository URL." });
         }
 
-        res.status(500).json({ error: "Audit failed. Please try again." });
+        if (err.message && (
+            err.message.includes("GitHub repository") ||
+            err.message.includes("rate limit") ||
+            err.message.includes("credentials") ||
+            err.message.includes("not found") ||
+            err.message.includes("Invalid")
+        )) {
+            return res.status(400).json({ error: err.message });
+        }
+
+        res.status(500).json({ error: err.message || "Audit failed. Please try again." });
     }
 };
 

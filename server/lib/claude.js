@@ -17,20 +17,41 @@ const isRetryable = (err) => {
     return status === 429 || status === 500 || status === 502 || status === 503 || err.code === "ECONNABORTED";
 };
 
-const callClaude = async (prompt, retries = 3) => {
+const callClaude = async (prompt, retries = 2) => {
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
+
+    let url = "https://openrouter.ai/api/v1/chat/completions";
+    let apiKey = openrouterKey;
+    let model = "openai/gpt-4o-mini";
+
+    if (!openrouterKey && groqKey) {
+        url = "https://api.groq.com/openai/v1/chat/completions";
+        apiKey = groqKey;
+        model = "llama-3.3-70b-versatile";
+    }
+
+    if (!apiKey) {
+        throw new Error("No AI API key configured (OPENROUTER_API_KEY or GROQ_API_KEY)");
+    }
+
     try {
+        const payload = {
+            model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 800,
+            temperature: 0.2
+        };
+        if (!openrouterKey && groqKey) {
+            payload.response_format = { type: "json_object" };
+        }
+
         const response = await axios.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                model: "groq/compound-mini",
-                messages: [{ role: "user", content: prompt }],
-                max_tokens: 800,
-                temperature: 0,
-                response_format: { type: "json_object" }
-            },
+            url,
+            payload,
             {
                 headers: {
-                    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+                    "Authorization": `Bearer ${apiKey}`,
                     "Content-Type": "application/json"
                 },
                 timeout: 20000
@@ -39,12 +60,13 @@ const callClaude = async (prompt, retries = 3) => {
         return response.data.choices[0].message.content;
     } catch (err) {
         if (isRetryable(err) && retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             return callClaude(prompt, retries - 1);
         }
         throw err;
     }
 };
+
 
 const describeHeaderStatus = (headerData) => {
     if (!headerData || (!headerData.error && headerData.responseTime == null)) {

@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 // cost-control measure as an abuse-prevention one.
 const auditLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 5,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many audit requests. Please wait a minute and try again." },
