@@ -15,14 +15,24 @@ const app = express();
 app.use(helmet());
 
 // Restrict CORS to the real frontend origin in production.
-// Set CLIENT_URL in your .env (e.g. https://vibecheck.app). Falls back to
-// allowing any origin only when CLIENT_URL isn't set, which should only
-// happen in local dev.
-const allowedOrigin = process.env.CLIENT_URL;
-if (!allowedOrigin) {
+// Set CLIENT_URL in your .env (e.g. https://vibe-check-navy.vercel.app).
+// Must include the https:// scheme. Falls back to allowing any origin only when
+// CLIENT_URL isn't set, which should only happen in local dev.
+const rawClientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim() : '';
+if (!rawClientUrl) {
   console.warn("CLIENT_URL not set — CORS is open to all origins (dev only, do not deploy like this)");
+} else if (!rawClientUrl.startsWith('http://') && !rawClientUrl.startsWith('https://')) {
+  console.error("CLIENT_URL is missing the http(s):// scheme — CORS origin will be rejected by browsers: " + rawClientUrl);
 }
-app.use(cors(allowedOrigin ? { origin: allowedOrigin } : {}));
+const corsOptions = rawClientUrl
+  ? {
+      origin: rawClientUrl,
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: false,
+    }
+  : {};
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '100kb' }));
 app.use(generalLimiter);

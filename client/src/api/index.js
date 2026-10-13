@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+// VITE_API_BASE_URL should be the backend origin with NO trailing slash and NO /api suffix,
+// e.g. https://vibecheck-unae.onrender.com
+// In development the variable is unset; the Vite proxy rewrites /api/* to localhost.
+const _rawBase = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = _rawBase
+  ? _rawBase.replace(/\/+$/, '') + '/api'  // strip trailing slash, append /api once
+  : '/api';                                 // dev: Vite proxy handles /api → localhost
 
 export const submitAudit = async (repoUrl, liveUrl, auditMode = 'core') => {
     const response = await axios.post(`${API_BASE}/audit`, {
